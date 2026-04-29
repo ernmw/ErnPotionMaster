@@ -1,0 +1,5 @@
+MENU:scripts/ErnPotionMaster/settings/menu_settings.lua
+
+PLAYER:scripts/ErnPotionMaster/player.lua
+GLOBAL:scripts/ErnPotionMaster/global.lua
+CUSTOM:scripts/ErnPotionMaster/alchemy.lua

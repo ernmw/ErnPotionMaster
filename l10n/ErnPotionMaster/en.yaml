@@ -1,0 +1,8 @@
+name: "Potion Master"
+description: "Pachinko Alchemy."
+
+disable_name: "Disable Mod"
+disable_description: "Turn the mod off."
+
+debugMode_name: "Debug Mode"
+debugMode_description: "Turn on verbose logging. Please turn this on and grab the log if you are going to report an issue."

@@ -1,6 +1,6 @@
 --[[
-LivelyMap for OpenMW.
-Copyright (C) Erin Pentecost 2025
+ErnPotionMaster for OpenMW.
+Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as

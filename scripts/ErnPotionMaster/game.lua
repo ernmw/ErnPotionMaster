@@ -51,14 +51,14 @@ As the Effect Score increases, you get additional magnitude and duration for tha
 If you have the appropriate alchemy equipment, you will get one pin per each equipment item:
 - Alembic: Reduces a random Unintended effect Effect Score. The amount depends on the tool quality.
 - Retort: Multiplies the current Effect Score of a random Intended effect. The amount depends on the tool quality.
-- Calcinator: Un-pops pins on the board instantly. The chance to un-Pop a pin depends on the tool quality.
+- Calcinator: Un-pops pins on the board instantly. The chance to un-Pop a pin depends on the tool quality. Before un-Popping, popped pins have their positions shuffled.
 Mortar and Pestle is different, since it has an impact on the number of Effect Pins.
 
 The Effect Score sticks around between Shots.
 The board is reset after each Shot.
 After making your predetermined number of Shots (2 to 4), the potion is created based on its Effect Scores.
 
-Pins have a chance to Pop when they are hit based on your Alchemy skill.
+Pins have a chance to Pop when they are hit based on your Alchemy skill, Intelligence, and Luck.
 ]]
 
 ---Returns the chance that a Pin will Pop when it is hit.

@@ -32,6 +32,7 @@ local util = require("openmw.util")
 ---@field position Vector2
 ---@field elasticity number
 ---@field radius number
+---@field enabled boolean
 
 ---@class PachinkoPhysics
 ---@field balls table<string, Ball>
@@ -46,17 +47,16 @@ local PachinkoPhysics = {}
 PachinkoPhysics.__index = PachinkoPhysics
 
 -- Constructor
----@param boundsMin Vector2
----@param boundsMax Vector2
+---@param size Vector2
 ---@return PachinkoPhysics
-function PachinkoPhysics.new(boundsMin, boundsMax)
+function PachinkoPhysics.new(size)
     local self = setmetatable({}, PachinkoPhysics)
 
     self.balls = {}
     self.pins = {}
 
-    self.boundsMin = boundsMin
-    self.boundsMax = boundsMax
+    self.boundsMin = util.vector2(0, 0)
+    self.boundsMax = size
 
     self.gravity = util.vector2(0, -9.8)
 
@@ -104,6 +104,7 @@ function PachinkoPhysics:addPin(id, position, elasticity, radius)
         position = position,
         elasticity = elasticity,
         radius = radius or 0.1,
+        enabled = true,
     }
 end
 
@@ -167,22 +168,24 @@ function PachinkoPhysics:advanceSimulation(dt)
     -- Ball ↔ Pin collisions
     for _, ball in pairs(self.balls) do
         for _, pin in pairs(self.pins) do
-            local delta = ball.position - pin.position
-            local dist = delta:length()
-            local minDist = ball.radius + pin.radius
+            if pin.enabled then
+                local delta = ball.position - pin.position
+                local dist = delta:length()
+                local minDist = ball.radius + pin.radius
 
-            if dist < minDist and dist > 0 then
-                local normal = delta / dist
+                if dist < minDist and dist > 0 then
+                    local normal = delta / dist
 
-                -- Push ball out
-                ball.position = pin.position + normal * minDist
+                    -- Push ball out
+                    ball.position = pin.position + normal * minDist
 
-                -- Reflect velocity
-                local e = combineElasticity(ball.elasticity, pin.elasticity)
-                ball.velocity = reflect(ball.velocity, normal) * e
+                    -- Reflect velocity
+                    local e = combineElasticity(ball.elasticity, pin.elasticity)
+                    ball.velocity = reflect(ball.velocity, normal) * e
 
-                if self.onPinHit then
-                    self.onPinHit(ball.id, pin.id)
+                    if self.onPinHit then
+                        self.onPinHit(ball.id, pin.id)
+                    end
                 end
             end
         end

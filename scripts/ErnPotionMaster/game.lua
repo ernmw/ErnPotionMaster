@@ -28,6 +28,9 @@ local ui            = require("openmw.ui")
 local util          = require("openmw.util")
 local pself         = require("openmw.self")
 local board         = require("scripts.ErnPotionMaster.render.board")
+local placepins     = require("scripts.ErnPotionMaster.placepins")
+local settings      = require("scripts.ErnPotionMaster.settings.settings")
+local physics       = require("scripts.ErnPotionMaster.physics.pachinko")
 local interfaces    = require('openmw.interfaces')
 
 local shootPosition = util.vector2(0.5, 0.05):emul(const.BoardSize)
@@ -38,8 +41,13 @@ This is used to figure out if you are trying to make a potion (positive effect) 
 If you're making a potion, all positive effects are Intended and negative effects are Unintended.
 This is reversed for poisons.
 
-After choosing your effect, you pick at two to four ingredients from a secondary list. This list contains only ingredients that contain that effect.
+After choosing your effect, you pick at two to four ingredients from a secondary list.
+For the first two ingredients you pick, the list will only contain ingredients that contain your desired effect.
+For third and and fourth ingredients you might pick, the list will only contain ingredients that have at least one effect in common with all the previously-selected ingredients.
 These ingredients are shot as Balls.
+
+After picking two to four ingredients, you can click on a "Create" button.
+This will delete the ingredients from your inventory and start up the game board UI.
 
 A Ball is one ingredient.
 There will be at least one pin per ingredient effect (up to 4). The more expensive the ingredient, and the better your Motar and Pestle, the more pins will be Effect Pins.
@@ -84,20 +92,68 @@ local PinClass = {
     CALCINATOR = 8,
 }
 
----@class AnnotatedBall : Ball
----@field ingredientObject any The actual gameobject.
----@field ingredientRecord any The record for the ingredient.
+---@class GamePin
+---@field class PinClass
+---@field ID number
+---@field popped boolean
 
----@class AnnotatedPin : Pin
----@field Class PinClass
----@field Popped boolean
+---@class EffectScore
+---@field magicEffect any
+---@field score number
 
----@class Board
----@field Balls AnnotatedBall[]
----@field Pins AnnotatedPin[]
+---@class GameState
+---@field ballID number
+---@field pins GamePin[]
+---@field effectScores EffectScore[]
+---@field pendingIngredientRecords any[]
+---@field currentIngredientRecord any
+---@field physics PachinkoPhysics
 
+---@type GameState?
+local gameState
 
----@param pinCounts {PinClass: number}[]
-local function buildNewBoard(pinCounts)
-
+local function onEdgeHit(ballId, edge)
+    settings.debugPrint("ball " .. tostring(ballId) .. " hit edge " .. tostring(edge))
 end
+
+local function onPinHit(ballId, pinId)
+    settings.debugPrint("ball " .. tostring(ballId) .. " hit pin " .. tostring(pinId))
+end
+
+---@param pinCounts table
+local function resetBoard(pinCounts)
+    if not gameState then
+        error("gameState is nil")
+    end
+    gameState.ballID = 0
+    gameState.pins = {}
+    gameState.physics = physics.new(const.BoardSize)
+    gameState.physics.onEdgeHit = onEdgeHit
+    gameState.physics.onPinHit = onPinHit
+
+    local totalPins = 0
+    for _, count in ipairs(pinCounts) do
+        totalPins = totalPins + count
+    end
+
+    local topOffset = util.vector2(0, 0.15)
+    ---@type Vector2[]
+    local potentialSpots = placepins(const.BoardSize:emul(util.vector2(1, 0.85)), const.PinRadius, totalPins)
+
+    local id = 100
+    -- assign pins to spots
+    for pinType, _ in pairs(pinCounts) do
+        id = id + 1
+        ---@type Vector2?
+        local position = table.remove(potentialSpots)
+        if position then
+            table.insert(gameState.pins, { class = pinType, id = id })
+            gameState.physics:addPin(id, position + topOffset, 0.9, const.PinRadius)
+        end
+    end
+end
+
+
+return {
+    resetBoard = resetBoard
+}

@@ -136,9 +136,18 @@ local PinClass = {
 ---@type GameState?
 local gameState
 
+---main window element
+local window
+
 local function onStopAlchemy()
     settings.debugPrint("stop alchemy")
     -- do cleanup
+    gameState = nil
+    board:Reset()
+    if window then
+        window:destroy()
+        window = nil
+    end
 
     -- forward to global to remove this script
     core.sendGlobalEvent(MOD_NAME .. 'onStopAlchemy', {
@@ -339,6 +348,7 @@ local function resetBoard(ingredientObjects, toolStrengths)
         table.insert(gameState.pendingIngredientRecords, record)
         obj:remove(1)
     end
+    gameState.currentIngredientRecord = table.remove(gameState.pendingIngredientRecords, 1)
 
     local pinCounts = {}
     pinCounts[PinClass.BUFFER] = 10
@@ -447,9 +457,28 @@ local stateHandlers = {
     [StateClass.FINISHED] = finished,
 }
 
-local function onUpdate(dt)
+
+local function openWindow()
+    window = ui.create({
+        layer = "Windows",
+        type = ui.TYPE.Image,
+        template = interfaces.MWUI.templates.borders,
+        props = {
+            size = const.BoardSize + util.vector2(32, 32),
+            anchor = util.vector2(0.5, 0.5),
+            relativePosition = util.vector2(0.5, 0.5),
+            resource = ui.texture({ path = "black" }),
+        },
+        content = ui.content {
+            board.boardElement
+        }
+    })
+end
+
+local function onFrame(dt)
     if gameState then
         stateHandlers[gameState.currentState](dt)
+        board.onFrame(dt)
     end
 end
 
@@ -467,13 +496,15 @@ local function onInit(data)
 
     local toolStrengths = getToolStrengths()
 
+    board:Reset()
     resetBoard(ingredients, toolStrengths)
+    openWindow()
 end
 
 return {
     engineHandlers = {
         onInit = onInit,
-        onUpdate = onUpdate,
+        onFrame = onFrame,
     },
     eventHandlers = {
         [MOD_NAME .. "onStopAlchemy"] = onStopAlchemy,

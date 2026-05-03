@@ -31,6 +31,7 @@ local search                    = require("scripts.ErnPotionMaster.search")
 ---@field _order number[]                  -- stable ordered ids
 ---@field AddRenderable fun(self: DynamicContainer, renderable: Renderable)
 ---@field Render fun(self: DynamicContainer, dt: number)
+---@field Reset fun(self: DynamicContainer)
 
 ---@class DynamicContainerMethods
 local DynamicContainerMethods   = {}
@@ -75,6 +76,13 @@ local function NewDynamicContainer(name, renderables)
     end
 
     return new
+end
+
+---@param self DynamicContainer
+function DynamicContainerMethods:Reset()
+    self.renderables = {}
+    self._layoutCache = {}
+    self._order = {}
 end
 
 ---@param self DynamicContainer

@@ -32,6 +32,7 @@ local placepins     = require("scripts.ErnPotionMaster.placepins")
 local settings      = require("scripts.ErnPotionMaster.settings.settings")
 local physics       = require("scripts.ErnPotionMaster.physics.pachinko")
 local interfaces    = require('openmw.interfaces')
+local shuffle       = require("scripts.ErnPotionMaster.shuffle")
 
 local shootPosition = util.vector2(0.5, 0.05):emul(const.BoardSize)
 
@@ -48,6 +49,8 @@ These ingredients are shot as Balls.
 
 After picking two to four ingredients, you can click on a "Create" button.
 This will delete the ingredients from your inventory and start up the game board UI.
+
+This file contains the game board UX, which is what follows:
 
 A Ball is one ingredient.
 There will be at least one pin per ingredient effect (up to 4). The more expensive the ingredient, and the better your Motar and Pestle, the more pins will be Effect Pins.
@@ -80,6 +83,18 @@ local function popChance()
     return util.clamp(1 - playerAlchemy - playerLuck - playerIntelligence, 0.1, 1)
 end
 
+---@enum (key) StateClass
+local StateClass = {
+    --- The player is picking their shot.
+    TARGET_SELECTION = 1,
+    --- We're watching the shot play out.
+    PHYSICS_SIMULATION = 2,
+    --- The shot is done, do Effect Score flourishes.
+    SHOT_DONE = 3,
+    --- The last shot is done, make the potion.
+    FINISHED = 4,
+}
+
 ---@enum (key) PinClass
 local PinClass = {
     EFFECT_1 = 1,
@@ -98,26 +113,168 @@ local PinClass = {
 ---@field popped boolean
 
 ---@class EffectScore
----@field magicEffect any
----@field score number
+---@field magicEffect any This is a openmw.core#MagicEffectWithParams
+---@field score number The running score for this effect. Persists across shots.
+---@field multiplier number The multiplier for each hit this shot. Resets.
 
 ---@class GameState
+---@field currentState StateClass
+---@field isPotion boolean true if a beneficial potion, false if a poison
 ---@field ballID number
----@field pins GamePin[]
+---@field pins {number: GamePin}
 ---@field effectScores EffectScore[]
----@field pendingIngredientRecords any[]
----@field currentIngredientRecord any
+---@field pendingIngredientRecords any[] subsequent balls that haven't been shot yet
+---@field currentIngredientRecord any? the ingredient matching the current ball
 ---@field physics PachinkoPhysics
+---@field toolStrengths {PinClass: number}
 
 ---@type GameState?
 local gameState
 
+local function setToolStrengths()
+    if not gameState then
+        error("setToolStrengths(): gameState is nil")
+    end
+    -- TODO!
+    gameState.toolStrengths = {
+        [PinClass.ALEMBIC] = 1,
+        [PinClass.CALCINATOR] = 1,
+        [PinClass.RETORT] = 1,
+    }
+end
+
+---comment
+---@param magicEffect any This is a openmw.core#MagicEffectWithParams
+---@param modFn fun(original:EffectScore): EffectScore
+local function modifyEffectScore(magicEffect, modFn)
+    if not gameState then
+        error("modifyEffectScore(): gameState is nil")
+    end
+    local found = false
+    --- find the matching effect, if any
+    for idx, effect in ipairs(gameState.effectScores) do
+        if effect.magicEffect.affectedAttribute == magicEffect.affectedAttribute and
+            effect.magicEffect.affectedSkill == magicEffect.affectedSkill and
+            effect.magicEffect.id == magicEffect.id then
+            local newScore = modFn(effect)
+            if newScore then
+                gameState.effectScores[idx] = newScore
+            else
+                table.remove(gameState.effectScores, idx)
+            end
+            found = true
+            break
+        end
+    end
+    if not found then
+        ---@type EffectScore
+        local newScore = modFn({ magicEffect = magicEffect, score = 0, multiplier = 0 })
+        if newScore then
+            table.insert(gameState.effectScores, newScore)
+        end
+    end
+end
+
 local function onEdgeHit(ballId, edge)
+    if not gameState then
+        error("onEdgeHit(): gameState is nil")
+        return
+    end
+    if not ballId or not edge then
+        error("onEdgeHit(): param(s) nil")
+        return
+    end
     settings.debugPrint("ball " .. tostring(ballId) .. " hit edge " .. tostring(edge))
+    --- If the bottom edge is hit, we need to stop the physics simulation and set up the
+    --- next shot (if there is one).
+end
+
+---comment
+---@param original EffectScore
+---@return EffectScore
+local function effectPinHit(original)
+    original.multiplier = original.multiplier + 1
+    original.score = original.score + original.multiplier
+    return original
 end
 
 local function onPinHit(ballId, pinId)
+    if not gameState then
+        error("onPinHit(): gameState is nil")
+        return
+    end
+    if not ballId or not pinId then
+        error("onPinHit(): param(s) nil")
+        return
+    end
     settings.debugPrint("ball " .. tostring(ballId) .. " hit pin " .. tostring(pinId))
+    if not gameState.pins[pinId] then
+        error("onPinHit(): unknown pinId")
+        return
+    end
+
+    if gameState.pins[pinId].class == PinClass.EFFECT_1 then
+        local effect = gameState.currentIngredientRecord.effects[1]
+        if not effect then
+            error("onPinHit(): invalid effect 1")
+            return
+        end
+        modifyEffectScore(effect, effectPinHit)
+    elseif gameState.pins[pinId].class == PinClass.EFFECT_2 then
+        local effect = gameState.currentIngredientRecord.effects[2]
+        if not effect then
+            error("onPinHit(): invalid effect 2")
+            return
+        end
+        modifyEffectScore(effect, effectPinHit)
+    elseif gameState.pins[pinId].class == PinClass.EFFECT_3 then
+        local effect = gameState.currentIngredientRecord.effects[3]
+        if not effect then
+            error("onPinHit(): invalid effect 3")
+            return
+        end
+        modifyEffectScore(effect, effectPinHit)
+    elseif gameState.pins[pinId].class == PinClass.EFFECT_4 then
+        local effect = gameState.currentIngredientRecord.effects[4]
+        if not effect then
+            error("onPinHit(): invalid effect 4")
+            return
+        end
+        modifyEffectScore(effect, effectPinHit)
+    elseif gameState.pins[pinId].class == PinClass.ALEMBIC then
+        -- reduce unintentional
+        for i, effectScore in ipairs(shuffle(gameState.effectScores)) do
+            if effectScore.magicEffect.effect.harmful == gameState.isPotion then
+                modifyEffectScore(effectScore.effect, function(original)
+                    local strength = gameState.toolStrengths[PinClass.ALEMBIC]
+                    original.score = original.score / (strength + 1)
+                    return original
+                end)
+                break
+            end
+        end
+    elseif gameState.pins[pinId].class == PinClass.RETORT then
+        -- increase intentional
+        for i, effectScore in ipairs(shuffle(gameState.effectScores)) do
+            if effectScore.magicEffect.effect.harmful ~= gameState.isPotion then
+                modifyEffectScore(effectScore.effect, function(original)
+                    local strength = gameState.toolStrengths[PinClass.RETORT]
+                    original.score = original.score * (strength + 1)
+                    return original
+                end)
+                break
+            end
+        end
+    elseif gameState.pins[pinId].class == PinClass.CALCINATOR then
+        settings.debugPrint("TODO: Calcinator effect")
+    end
+
+    -- todo: render a little flash on the pin and maybe scale the pin up a little or jiggle
+
+    if math.random() < popChance() then
+        gameState.pins[pinId].popped = true
+        -- todo: render a little popping sprite
+    end
 end
 
 ---@param pinCounts table
@@ -125,11 +282,12 @@ local function resetBoard(pinCounts)
     if not gameState then
         error("gameState is nil")
     end
-    gameState.ballID = 0
+    gameState.ballID = 1
     gameState.pins = {}
     gameState.physics = physics.new(const.BoardSize)
     gameState.physics.onEdgeHit = onEdgeHit
     gameState.physics.onPinHit = onPinHit
+    setToolStrengths()
 
     local totalPins = 0
     for _, count in ipairs(pinCounts) do
@@ -147,13 +305,51 @@ local function resetBoard(pinCounts)
         ---@type Vector2?
         local position = table.remove(potentialSpots)
         if position then
-            table.insert(gameState.pins, { class = pinType, id = id })
+            gameState.pins[id] = { class = pinType, ID = id, popped = false }
             gameState.physics:addPin(id, position + topOffset, 0.9, const.PinRadius)
         end
     end
 end
 
+---Spawns a ball at the top of the screen with the provided velocity vector.
+---@param directionVec any
+local function shootBall(directionVec)
+    if not gameState then
+        error("gameState is nil")
+    end
+    if gameState.currentState ~= StateClass.TARGET_SELECTION then
+        error("gameState.currentState is not Target Selection")
+    end
+    if not gameState.currentIngredientRecord then
+        error("gameState.currentIngredientRecord is nil")
+    end
+end
+
+local function targetSelection(dt)
+end
+local function physicsSimulation(dt)
+end
+local function shotDone(dt)
+end
+local function finished(dt)
+end
+
+---@type table
+local stateHandlers = {
+    [StateClass.TARGET_SELECTION] = targetSelection,
+    [StateClass.PHYSICS_SIMULATION] = physicsSimulation,
+    [StateClass.SHOT_DONE] = shotDone,
+    [StateClass.FINISHED] = finished,
+}
+
+local function onUpdate(dt)
+    if gameState then
+        stateHandlers[gameState.currentState](dt)
+    end
+end
+
 
 return {
-    resetBoard = resetBoard
+    resetBoard = resetBoard,
+    onUpdate = onUpdate,
 }

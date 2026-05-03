@@ -15,14 +15,126 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
-local MOD_NAME = require("scripts.ErnPotionMaster.ns")
-local core = require("openmw.core")
-local pself = require("openmw.self")
-local settings = require("scripts.ErnPotionMaster.settings.settings")
 
-local function onInit(data)
-    settings.debugPrint("start alchemy")
+-- This file contains the game state, including the board.
+-- It owns and rebuilds the pachinko physics board as necessary.
+-- It owns and rebuilds the render board as necessary.
+-- It maintains a registry of balls and pins indexed by their ID,
+-- and sends this info as necessary to both the pachinko physics board and render board.
+
+local MOD_NAME      = require("scripts.ErnPotionMaster.ns")
+local const         = require("scripts.ErnPotionMaster.const")
+local ui            = require("openmw.ui")
+local util          = require("openmw.util")
+local pself         = require("openmw.self")
+local core          = require("openmw.core")
+local types         = require("openmw.types")
+local board         = require("scripts.ErnPotionMaster.render.board")
+local placepins     = require("scripts.ErnPotionMaster.placepins")
+local settings      = require("scripts.ErnPotionMaster.settings.settings")
+local physics       = require("scripts.ErnPotionMaster.physics.pachinko")
+local interfaces    = require('openmw.interfaces')
+local shuffle       = require("scripts.ErnPotionMaster.shuffle")
+local templates     = require("scripts.ErnPotionMaster.render.templates")
+
+local shootPosition = util.vector2(0.5, 0.05):emul(const.BoardSize)
+
+--[[
+Before you begin, you pick the target effect you want. You can only choose effects that are present in atleast two different ingredients available to you.
+This is used to figure out if you are trying to make a potion (positive effect) or poison (negative effect).
+If you're making a potion, all positive effects are Intended and negative effects are Unintended.
+This is reversed for poisons.
+
+After choosing your effect, you pick at two to four ingredients from a secondary list.
+For the first two ingredients you pick, the list will only contain ingredients that contain your desired effect.
+For third and and fourth ingredients you might pick, the list will only contain ingredients that have at least one effect in common with all the previously-selected ingredients.
+These ingredients are shot as Balls.
+
+After picking two to four ingredients, you can click on a "Create" button.
+This will delete the ingredients from your inventory and start up the game board UI.
+
+This file contains the game board UX, which is what follows:
+
+A Ball is one ingredient.
+There will be at least one pin per ingredient effect (up to 4). The more expensive the ingredient, and the better your Motar and Pestle, the more pins will be Effect Pins.
+Hit the effect pin to increase the Effect Score for that individual effect.
+Each time you hit an effect pin for the same effect on the same shot,
+you get exponentially more points for that Effect Score.
+As the Effect Score increases, you get additional magnitude and duration for that effect.
+
+If you have the appropriate alchemy equipment, you will get one pin per each equipment item:
+- Alembic: Reduces a random Unintended effect Effect Score. The amount depends on the tool quality.
+- Retort: Multiplies the current Effect Score of a random Intended effect. The amount depends on the tool quality.
+- Calcinator: Un-pops pins on the board instantly. The chance to un-Pop a pin depends on the tool quality. Before un-Popping, popped pins have their positions shuffled.
+Mortar and Pestle is different, since it has an impact on the number of Effect Pins.
+
+The Effect Score sticks around between Shots.
+The board is reset after each Shot.
+After making your predetermined number of Shots (2 to 4), the potion is created based on its Effect Scores.
+
+Pins have a chance to Pop when they are hit based on your Alchemy skill, Intelligence, and Luck.
+]]
+
+---Returns the chance that a Pin will Pop when it is hit.
+---If it pops, it gets deleted. The pin hit effect still takes place, though.
+---@return number between 0.1 and 1
+local function popChance()
+    local playerAlchemy = util.remap(util.clamp(pself.type.stats.skills.alchemy(pself).modified, 0, 130), 0, 130, 0, 0.7)
+    local playerLuck = util.remap(util.clamp(pself.type.stats.attributes.luck(pself).modified, 0, 130), 0, 130, 0, 0.1)
+    local playerIntelligence = util.remap(util.clamp(pself.type.stats.attributes.intelligence(pself).modified, 0, 130), 0,
+        130, 0, .2)
+    return util.clamp(1 - playerAlchemy - playerLuck - playerIntelligence, 0.1, 1)
 end
+
+---@enum StateClass
+local StateClass = {
+    --- The player is picking their shot.
+    TARGET_SELECTION = 1,
+    --- We're watching the shot play out.
+    PHYSICS_SIMULATION = 2,
+    --- The shot is done, do Effect Score flourishes.
+    SHOT_DONE = 3,
+    --- The last shot is done, make the potion.
+    FINISHED = 4,
+}
+
+---@enum PinClass
+local PinClass = {
+    EFFECT_1 = 1,
+    EFFECT_2 = 2,
+    EFFECT_3 = 3,
+    EFFECT_4 = 4,
+    BUFFER = 5,
+    ALEMBIC = 6,
+    RETORT = 7,
+    CALCINATOR = 8,
+    -- special
+    MORTAR = 9,
+}
+
+---@class GamePin
+---@field class PinClass
+---@field ID number
+---@field popped boolean
+
+---@class EffectScore
+---@field magicEffect any This is a openmw.core#MagicEffectWithParams
+---@field score number The running score for this effect. Persists across shots.
+---@field multiplier number The multiplier for each hit this shot. Resets.
+
+---@class GameState
+---@field currentState StateClass
+---@field isPotion boolean true if a beneficial potion, false if a poison
+---@field ballID number
+---@field pins {number: GamePin}
+---@field effectScores EffectScore[]
+---@field pendingIngredientRecords any[] subsequent balls that haven't been shot yet
+---@field currentIngredientRecord any? the ingredient matching the current ball
+---@field physics PachinkoPhysics
+---@field toolStrengths {PinClass: number}
+
+---@type GameState?
+local gameState
 
 local function onStopAlchemy()
     settings.debugPrint("stop alchemy")
@@ -34,14 +146,334 @@ local function onStopAlchemy()
     })
 end
 
-local function onFrame(dt)
-    -- physics and stuff
+local function getToolStrengths()
+    -- TODO!
+    return {
+        [PinClass.ALEMBIC] = 1,
+        [PinClass.CALCINATOR] = 1,
+        [PinClass.RETORT] = 1,
+        [PinClass.MORTAR] = 1,
+    }
+end
+
+---comment
+---@param magicEffect any This is a openmw.core#MagicEffectWithParams
+---@param modFn fun(original:EffectScore): EffectScore
+local function modifyEffectScore(magicEffect, modFn)
+    if not gameState then
+        error("modifyEffectScore(): gameState is nil")
+    end
+    local found = false
+    --- find the matching effect, if any
+    for idx, effect in ipairs(gameState.effectScores) do
+        if effect.magicEffect.affectedAttribute == magicEffect.affectedAttribute and
+            effect.magicEffect.affectedSkill == magicEffect.affectedSkill and
+            effect.magicEffect.id == magicEffect.id then
+            local newScore = modFn(effect)
+            if newScore then
+                gameState.effectScores[idx] = newScore
+            else
+                table.remove(gameState.effectScores, idx)
+            end
+            found = true
+            break
+        end
+    end
+    if not found then
+        ---@type EffectScore
+        local newScore = modFn({ magicEffect = magicEffect, score = 0, multiplier = 0 })
+        if newScore then
+            table.insert(gameState.effectScores, newScore)
+        end
+    end
+end
+
+local function onEdgeHit(ballId, edge)
+    if not gameState then
+        error("onEdgeHit(): gameState is nil")
+        return
+    end
+    if not ballId or not edge then
+        error("onEdgeHit(): param(s) nil")
+        return
+    end
+    settings.debugPrint("ball " .. tostring(ballId) .. " hit edge " .. tostring(edge))
+    if edge == "bottom" then
+        settings.debugPrint("ball hit bottom edge")
+        gameState.currentState = StateClass.SHOT_DONE
+    end
+end
+
+---comment
+---@param original EffectScore
+---@return EffectScore
+local function effectPinHit(original)
+    original.multiplier = original.multiplier + 1
+    original.score = original.score + original.multiplier
+    return original
+end
+
+local function onPinHit(ballId, pinId)
+    if not gameState then
+        error("onPinHit(): gameState is nil")
+        return
+    end
+    if not ballId or not pinId then
+        error("onPinHit(): param(s) nil")
+        return
+    end
+    settings.debugPrint("ball " .. tostring(ballId) .. " hit pin " .. tostring(pinId))
+    if not gameState.pins[pinId] then
+        error("onPinHit(): unknown pinId")
+        return
+    end
+
+    if gameState.pins[pinId].class == PinClass.EFFECT_1 then
+        local effect = gameState.currentIngredientRecord.effects[1]
+        if not effect then
+            error("onPinHit(): invalid effect 1")
+            return
+        end
+        modifyEffectScore(effect, effectPinHit)
+    elseif gameState.pins[pinId].class == PinClass.EFFECT_2 then
+        local effect = gameState.currentIngredientRecord.effects[2]
+        if not effect then
+            error("onPinHit(): invalid effect 2")
+            return
+        end
+        modifyEffectScore(effect, effectPinHit)
+    elseif gameState.pins[pinId].class == PinClass.EFFECT_3 then
+        local effect = gameState.currentIngredientRecord.effects[3]
+        if not effect then
+            error("onPinHit(): invalid effect 3")
+            return
+        end
+        modifyEffectScore(effect, effectPinHit)
+    elseif gameState.pins[pinId].class == PinClass.EFFECT_4 then
+        local effect = gameState.currentIngredientRecord.effects[4]
+        if not effect then
+            error("onPinHit(): invalid effect 4")
+            return
+        end
+        modifyEffectScore(effect, effectPinHit)
+    elseif gameState.pins[pinId].class == PinClass.ALEMBIC then
+        -- reduce unintentional
+        for i, effectScore in ipairs(shuffle(gameState.effectScores)) do
+            if effectScore.magicEffect.effect.harmful == gameState.isPotion then
+                modifyEffectScore(effectScore.effect, function(original)
+                    local strength = gameState.toolStrengths[PinClass.ALEMBIC]
+                    original.score = original.score / (strength + 1)
+                    return original
+                end)
+                break
+            end
+        end
+    elseif gameState.pins[pinId].class == PinClass.RETORT then
+        -- increase intentional
+        for i, effectScore in ipairs(shuffle(gameState.effectScores)) do
+            if effectScore.magicEffect.effect.harmful ~= gameState.isPotion then
+                modifyEffectScore(effectScore.effect, function(original)
+                    local strength = gameState.toolStrengths[PinClass.RETORT]
+                    original.score = original.score * (strength + 1)
+                    return original
+                end)
+                break
+            end
+        end
+    elseif gameState.pins[pinId].class == PinClass.CALCINATOR then
+        settings.debugPrint("TODO: Calcinator effect")
+    end
+
+    -- todo: render a little flash on the pin and maybe scale the pin up a little or jiggle
+
+    if math.random() < popChance() then
+        settings.debugPrint("pin " .. tostring(pinId) .. " popped")
+        gameState.pins[pinId].popped = true
+        gameState.physics.pins[pinId].enabled = false
+        -- todo: render a little popping sprite
+    end
+end
+
+local function addToolPins(pins, toolStrengths)
+    pins = pins or {}
+    for pinType, strength in pairs(toolStrengths) do
+        if pinType ~= PinClass.MORTAR then
+            pins[pinType] = 1
+        end
+    end
+    return pins
+end
+
+local function addEffectPins(pins, pestleStrength, ingredientRecord)
+    pins = pins or {}
+    local pinCount = util.clamp(math.floor((pestleStrength + 1) * math.log(10, ingredientRecord.value)), 1, 5)
+    for idx, _ in ipairs(ingredientRecord.effects) do
+        if idx == 1 then
+            pins[PinClass.EFFECT_1] = pinCount
+        elseif idx == 2 then
+            pins[PinClass.EFFECT_2] = pinCount
+        elseif idx == 3 then
+            pins[PinClass.EFFECT_3] = pinCount
+        elseif idx == 4 then
+            pins[PinClass.EFFECT_4] = pinCount
+        end
+    end
+    return pins
+end
+
+local function resetBoard(ingredientObjects, toolStrengths)
+    if not gameState then
+        error("gameState is nil")
+    end
+    gameState.ballID = 1
+    gameState.pins = {}
+    gameState.physics = physics.new(const.BoardSize)
+    gameState.physics.onEdgeHit = onEdgeHit
+    gameState.physics.onPinHit = onPinHit
+    gameState.toolStrengths = toolStrengths
+
+    gameState.pendingIngredientRecords = {}
+    for _, obj in ipairs(ingredientObjects) do
+        local record = types.Ingredient.record(obj)
+        settings.debugPrint("ingredient: " .. tostring(record.name))
+        table.insert(gameState.pendingIngredientRecords, record)
+        obj:remove(1)
+    end
+
+    local pinCounts = {}
+    pinCounts[PinClass.BUFFER] = 10
+    pinCounts = addToolPins(pinCounts, gameState.toolStrengths)
+    pinCounts = addEffectPins(pinCounts, gameState.toolStrengths[PinClass.MORTAR] or 0, ingredientObjects)
+
+    local totalPins = 0
+    for pinType, count in ipairs(pinCounts) do
+        totalPins = totalPins + count
+    end
+
+    local topOffset = util.vector2(0, 0.15)
+    ---@type Vector2[]
+    local potentialSpots = placepins(const.BoardSize:emul(util.vector2(1, 0.85)), const.PinRadius, totalPins)
+
+    local id = 100
+    -- assign pins to spots
+    for pinType, _ in pairs(pinCounts) do
+        id = id + 1
+        ---@type Vector2?
+        local position = table.remove(potentialSpots)
+        if position then
+            gameState.pins[id] = { class = pinType, ID = id, popped = false }
+            gameState.physics:addPin(id, position + topOffset, 0.9, const.PinRadius)
+            board.pins:AddRenderable({
+                id = id,
+                layout = function(dt, prevLayout)
+                    local pin = gameState.physics.pins[id]
+                    if pin then
+                        return {
+                            template = templates.pin,
+                            name = "pin_" .. tostring(id),
+                            props = {
+                                position = gameState.physics.pins[id].position,
+                                alpha = pin.enabled and 1 or 0.2
+                            }
+                        }
+                    else
+                        -- delete the pin from renderer
+                        return false
+                    end
+                end
+            })
+        end
+    end
+end
+
+---Spawns a ball at the top of the screen with the provided velocity vector.
+---@param directionVec any
+local function shootBall(directionVec)
+    if not gameState then
+        error("gameState is nil")
+    end
+    if gameState.currentState ~= StateClass.TARGET_SELECTION then
+        error("gameState.currentState is not Target Selection")
+    end
+    if not gameState.currentIngredientRecord then
+        error("gameState.currentIngredientRecord is nil")
+    end
+    gameState.ballID = gameState.ballID + 1
+    local ballID = gameState.ballID
+    gameState.physics:addBall(ballID, shootPosition, directionVec, 3, 1, const.BallRadius)
+    board.balls:AddRenderable({
+        id = ballID,
+        layout = function(dt, prevLayout)
+            local ball = gameState.physics.balls[ballID]
+            if ball then
+                return {
+                    template = templates.ball,
+                    name = "ball_" .. tostring(ballID),
+                    props = {
+                        position = gameState.physics.balls[ballID].position
+                    }
+                }
+            else
+                -- delete the ball from renderer
+                return false
+            end
+        end
+    })
+end
+
+local function targetSelection(dt)
+    -- TODO: fill out stub
+    shootBall(util.vector2(math.random(), math.random()))
+end
+local function physicsSimulation(dt)
+    if not gameState then
+        error("gameState is nil")
+    end
+    gameState.physics:advanceSimulation(dt)
+end
+local function shotDone(dt)
+    -- todo: set up next shot?
+end
+local function finished(dt)
+    -- todo: finish
+    onStopAlchemy()
+end
+
+---@type table
+local stateHandlers = {
+    [StateClass.TARGET_SELECTION] = targetSelection,
+    [StateClass.PHYSICS_SIMULATION] = physicsSimulation,
+    [StateClass.SHOT_DONE] = shotDone,
+    [StateClass.FINISHED] = finished,
+}
+
+local function onUpdate(dt)
+    if gameState then
+        stateHandlers[gameState.currentState](dt)
+    end
+end
+
+local function onInit(data)
+    settings.debugPrint("start alchemy")
+
+    -- TODO: actually do selection logic. this is just for testing
+    local ingredients = {}
+    for _, item in ipairs(shuffle(pself.type.inventory(pself):getAll(types.Ingredient))) do
+        table.insert(ingredients, item)
+        if #ingredients > 2 then
+            break
+        end
+    end
+
+    local toolStrengths = getToolStrengths()
+
+    resetBoard(ingredients, toolStrengths)
 end
 
 return {
     engineHandlers = {
         onInit = onInit,
-        onFrame = onFrame,
+        onUpdate = onUpdate,
     },
     eventHandlers = {
         [MOD_NAME .. "onStopAlchemy"] = onStopAlchemy,

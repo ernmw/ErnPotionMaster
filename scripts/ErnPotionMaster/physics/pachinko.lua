@@ -17,7 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 local util = require("openmw.util")
 
----@alias ID number|string
+---@alias ID number
 
 ---@class Ball
 ---@field id ID
@@ -35,13 +35,13 @@ local util = require("openmw.util")
 ---@field enabled boolean
 
 ---@class PachinkoPhysics
----@field balls table<string, Ball>
----@field pins table<string, Pin>
+---@field balls table<number, Ball>
+---@field pins table<number, Pin>
 ---@field boundsMin Vector2
 ---@field boundsMax Vector2
 ---@field gravity Vector2
 ---@field onPinHit fun(ballId: ID, pinId: ID)?
----@field onEdgeHit fun(ballId: ID, edge: ID)?
+---@field onEdgeHit fun(ballId: ID, edge: string)?
 ---@field _isStepping boolean
 local PachinkoPhysics = {}
 PachinkoPhysics.__index = PachinkoPhysics

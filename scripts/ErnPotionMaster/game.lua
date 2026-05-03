@@ -33,6 +33,7 @@ local settings      = require("scripts.ErnPotionMaster.settings.settings")
 local physics       = require("scripts.ErnPotionMaster.physics.pachinko")
 local interfaces    = require('openmw.interfaces')
 local shuffle       = require("scripts.ErnPotionMaster.shuffle")
+local templates     = require("scripts.ErnPotionMaster.render.templates")
 
 local shootPosition = util.vector2(0.5, 0.05):emul(const.BoardSize)
 
@@ -83,7 +84,7 @@ local function popChance()
     return util.clamp(1 - playerAlchemy - playerLuck - playerIntelligence, 0.1, 1)
 end
 
----@enum (key) StateClass
+---@enum StateClass
 local StateClass = {
     --- The player is picking their shot.
     TARGET_SELECTION = 1,
@@ -95,7 +96,7 @@ local StateClass = {
     FINISHED = 4,
 }
 
----@enum (key) PinClass
+---@enum PinClass
 local PinClass = {
     EFFECT_1 = 1,
     EFFECT_2 = 2,
@@ -185,8 +186,10 @@ local function onEdgeHit(ballId, edge)
         return
     end
     settings.debugPrint("ball " .. tostring(ballId) .. " hit edge " .. tostring(edge))
-    --- If the bottom edge is hit, we need to stop the physics simulation and set up the
-    --- next shot (if there is one).
+    if edge == "bottom" then
+        settings.debugPrint("ball hit bottom edge")
+        gameState.currentState = StateClass.SHOT_DONE
+    end
 end
 
 ---comment
@@ -272,7 +275,9 @@ local function onPinHit(ballId, pinId)
     -- todo: render a little flash on the pin and maybe scale the pin up a little or jiggle
 
     if math.random() < popChance() then
+        settings.debugPrint("pin " .. tostring(pinId) .. " popped")
         gameState.pins[pinId].popped = true
+        gameState.physics.pins[pinId].enabled = false
         -- todo: render a little popping sprite
     end
 end
@@ -307,6 +312,25 @@ local function resetBoard(pinCounts)
         if position then
             gameState.pins[id] = { class = pinType, ID = id, popped = false }
             gameState.physics:addPin(id, position + topOffset, 0.9, const.PinRadius)
+            board.pins:AddRenderable({
+                id = id,
+                layout = function(dt, prevLayout)
+                    local pin = gameState.physics.pins[id]
+                    if pin then
+                        return {
+                            template = templates.pin,
+                            name = "pin_" .. tostring(id),
+                            props = {
+                                position = gameState.physics.pins[id].position,
+                                alpha = pin.enabled and 1 or 0.2
+                            }
+                        }
+                    else
+                        -- delete the pin from renderer
+                        return false
+                    end
+                end
+            })
         end
     end
 end
@@ -323,11 +347,38 @@ local function shootBall(directionVec)
     if not gameState.currentIngredientRecord then
         error("gameState.currentIngredientRecord is nil")
     end
+    gameState.ballID = gameState.ballID + 1
+    local ballID = gameState.ballID
+    gameState.physics:addBall(ballID, shootPosition, directionVec, 3, 1, const.BallRadius)
+    board.balls:AddRenderable({
+        id = ballID,
+        layout = function(dt, prevLayout)
+            local ball = gameState.physics.balls[ballID]
+            if ball then
+                return {
+                    template = templates.ball,
+                    name = "ball_" .. tostring(ballID),
+                    props = {
+                        position = gameState.physics.balls[ballID].position
+                    }
+                }
+            else
+                -- delete the ball from renderer
+                return false
+            end
+        end
+    })
 end
 
 local function targetSelection(dt)
+    -- TODO: fill out stub
+    shootBall(util.vector2(math.random(), math.random()))
 end
 local function physicsSimulation(dt)
+    if not gameState then
+        error("gameState is nil")
+    end
+    gameState.physics:advanceSimulation(dt)
 end
 local function shotDone(dt)
 end

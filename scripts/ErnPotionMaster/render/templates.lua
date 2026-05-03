@@ -59,3 +59,8 @@ local ballWidget = {
         }
     }
 }
+
+return {
+    pinWidget = pinWidget,
+    ballWidget = ballWidget
+}

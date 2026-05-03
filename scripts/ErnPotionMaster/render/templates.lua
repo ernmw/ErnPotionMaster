@@ -15,7 +15,8 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
-local MOD_NAME   = require("scripts.ErnPotionMaster")
+local MOD_NAME   = require("scripts.ErnPotionMaster.ns")
+local const      = require("scripts.ErnPotionMaster.const")
 local ui         = require("openmw.ui")
 local util       = require("openmw.util")
 local dynamic    = require("scripts.ErnPotionMaster.render.dynamic")
@@ -23,7 +24,7 @@ local interfaces = require('openmw.interfaces')
 
 local pinWidget  = {
     props = {
-        size = util.vector2(32, 32),
+        size = const.PinSize,
         anchor = util.vector2(0.5, 0.5),
     },
     content = {
@@ -42,7 +43,7 @@ local pinWidget  = {
 
 local ballWidget = {
     props = {
-        size = util.vector2(32, 32),
+        size = const.BallSize,
         anchor = util.vector2(0.5, 0.5),
     },
     content = {

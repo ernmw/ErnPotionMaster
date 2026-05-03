@@ -15,42 +15,45 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
-local MOD_NAME   = require("scripts.ErnPotionMaster.ns")
-local const      = require("scripts.ErnPotionMaster.const")
-local ui         = require("openmw.ui")
-local util       = require("openmw.util")
-local dynamic    = require("scripts.ErnPotionMaster.render.dynamic")
-local interfaces = require('openmw.interfaces')
+local MOD_NAME     = require("scripts.ErnPotionMaster.ns")
+local const        = require("scripts.ErnPotionMaster.const")
+local ui           = require("openmw.ui")
+local util         = require("openmw.util")
+local dynamic      = require("scripts.ErnPotionMaster.render.dynamic")
+local interfaces   = require('openmw.interfaces')
 
-local pins       = dynamic.NewDynamicContainer("pins", {})
+local pins         = dynamic.NewDynamicContainer("pins", {})
 -- balls are in their own container because they change often.
-local balls      = dynamic.NewDynamicContainer("balls", {})
-local boardElement
-
-local function newBoard()
-    boardElement = ui.create {
-        name = 'board',
-        type = ui.TYPE.Container,
-        template = interfaces.MWUI.templates.boxTransparent,
-        props = {
-            size = const.BoardSize,
-            visible = true,
-            --propagateEvents = false,
-        },
-        content = ui.content {
-            pins.element,
-            balls.element,
-        }
+local balls        = dynamic.NewDynamicContainer("balls", {})
+local boardElement = ui.create {
+    name = 'board',
+    type = ui.TYPE.Container,
+    template = interfaces.MWUI.templates.boxTransparent,
+    props = {
+        size = const.BoardSize,
+        visible = true,
+        --propagateEvents = false,
+    },
+    content = ui.content {
+        pins.element,
+        balls.element,
     }
-end
+}
 
-local ballDT = 0
-local pinDT = 0
+local minUpdate    = 0.01
+local ballDT       = 0
+local pinDT        = 0
 local function onFrame(dt)
+    if not boardElement.props.layout.visible then
+        ballDT = minUpdate
+        pinDT  = minUpdate
+        return
+    end
+
     ballDT = ballDT + dt
     pinDT = pinDT + dt
 
-    if ballDT < 0.05 and pinDT < 0.05 then
+    if ballDT < minUpdate and pinDT < minUpdate then
         return
     elseif ballDT > pinDT then
         balls:Render(ballDT)
@@ -62,7 +65,8 @@ local function onFrame(dt)
 end
 
 return {
-    newBoard = newBoard,
     boardElement = boardElement,
+    balls = balls,
+    pins = pins,
     onFrame = onFrame,
 }

@@ -17,5 +17,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 local util = require("openmw.util")
 return {
-    BoardSize = util.vector2(250, 350)
+    BoardSize = util.vector2(256, 352),
+    PinSize = util.vector2(32, 32),
+    PinRadius = 15,
+    BallSize = util.vector2(32, 32),
+    BallRadius = 15,
+    Rows = 10,
+    Columns = 6
 }

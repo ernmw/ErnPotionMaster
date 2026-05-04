@@ -18,6 +18,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 local ui                        = require("openmw.ui")
 local util                      = require("openmw.util")
 local search                    = require("scripts.ErnPotionMaster.search")
+local const                     = require("scripts.ErnPotionMaster.const")
 
 ---@class Renderable
 ---@field id number
@@ -55,16 +56,17 @@ end
 ---@param renderables Renderable[]
 ---@return DynamicContainer
 local function NewDynamicContainer(name, renderables)
+    local elem = ui.create({
+        name = name,
+        type = ui.TYPE.Widget,
+        props = {
+            relativeSize = util.vector2(1, 1),
+        },
+        content = ui.content {},
+    })
     local new = {
         name = name,
-        element = ui.create {
-            name = name,
-            type = ui.TYPE.Widget,
-            props = {
-                relativeSize = util.vector2(1, 1),
-            },
-            content = ui.content {},
-        },
+        element = elem,
         renderables = {},
         _layoutCache = {},
         _order = {},

@@ -23,12 +23,13 @@ local dynamic    = require("scripts.ErnPotionMaster.render.dynamic")
 local interfaces = require('openmw.interfaces')
 
 local pinWidget  = {
+    type = ui.TYPE.Widget,
     props = {
         size = const.PinSize,
         anchor = util.vector2(0.5, 0.5),
     },
     content = {
-        {
+        ui.content({
             type = ui.TYPE.Image,
             props = {
                 relativeSize = util.vector2(1, 1),
@@ -37,17 +38,18 @@ local pinWidget  = {
                 },
             },
             events = {},
-        }
+        })
     }
 }
 
 local ballWidget = {
+    type = ui.TYPE.Widget,
     props = {
         size = const.BallSize,
         anchor = util.vector2(0.5, 0.5),
     },
     content = {
-        {
+        ui.content({
             type = ui.TYPE.Image,
             props = {
                 relativeSize = util.vector2(1, 1),
@@ -56,7 +58,7 @@ local ballWidget = {
                 },
             },
             events = {},
-        }
+        })
     }
 }
 

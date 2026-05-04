@@ -25,7 +25,7 @@ local interfaces   = require('openmw.interfaces')
 local pins         = dynamic.NewDynamicContainer("pins", {})
 -- balls are in their own container because they change often.
 local balls        = dynamic.NewDynamicContainer("balls", {})
-local boardElement = ui.create {
+local boardElement = ui.create({
     name = 'board',
     type = ui.TYPE.Widget,
     props = {
@@ -33,11 +33,11 @@ local boardElement = ui.create {
         visible = true,
         --propagateEvents = false,
     },
-    content = ui.content {
+    content = ui.content({
         pins.element,
         balls.element,
-    }
-}
+    })
+})
 
 local minUpdate    = 0.01
 local ballDT       = 0

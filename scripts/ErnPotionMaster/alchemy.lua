@@ -29,7 +29,6 @@ local util          = require("openmw.util")
 local pself         = require("openmw.self")
 local core          = require("openmw.core")
 local types         = require("openmw.types")
-local board         = require("scripts.ErnPotionMaster.render.board")
 local placepins     = require("scripts.ErnPotionMaster.placepins")
 local settings      = require("scripts.ErnPotionMaster.settings.settings")
 local physics       = require("scripts.ErnPotionMaster.physics.pachinko")
@@ -142,12 +141,14 @@ local gameState
 
 ---main window element
 local window
+---board UI element
+local board
 
 local function onStopAlchemy()
     settings.debugPrint("stop alchemy")
     -- do cleanup
     gameState = nil
-    board.reset()
+    if board then board.reset() end
     if window then
         window:destroy()
         window = nil
@@ -335,6 +336,10 @@ local function addEffectPins(pins, pestleStrength, ingredientRecord)
 end
 
 local function resetBoard(ingredientObjects, toolStrengths)
+    settings.debugPrint("resetBoard() called")
+    board = require("scripts.ErnPotionMaster.render.board")
+    settings.debugPrint("finished importing render board")
+
     gameState = {
         -- todo: finish
         isPotion = true,
@@ -484,9 +489,9 @@ local function openWindow()
             relativePosition = util.vector2(0.5, 0.5),
             --resource = ui.texture({ path = "black" }),
         },
-        content = ui.content {
+        content = ui.content({
             board.boardElement
-        }
+        })
     })
 end
 
@@ -510,7 +515,6 @@ local function onInit(data)
 
     local toolStrengths = getToolStrengths()
 
-    board.reset()
     resetBoard(ingredients, toolStrengths)
     openWindow()
 end

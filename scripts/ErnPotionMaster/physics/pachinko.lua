@@ -127,8 +127,8 @@ function PachinkoPhysics:advanceSimulation(dt)
 
         -- Left
         if pos.x - r < self.boundsMin.x then
-            pos.x = self.boundsMin.x + r
-            vel.x = -vel.x
+            pos = util.vector2(self.boundsMin.x + r, pos.y)
+            vel = util.vector2(-vel.x, vel.y)
             if self.onEdgeHit then
                 self.onEdgeHit(ball.id, "left")
             end
@@ -136,8 +136,8 @@ function PachinkoPhysics:advanceSimulation(dt)
 
         -- Right
         if pos.x + r > self.boundsMax.x then
-            pos.x = self.boundsMax.x - r
-            vel.x = -vel.x
+            pos = util.vector2(self.boundsMax.x - r, pos.y)
+            vel = util.vector2(-vel.x, vel.y)
             if self.onEdgeHit then
                 self.onEdgeHit(ball.id, "right")
             end
@@ -145,8 +145,8 @@ function PachinkoPhysics:advanceSimulation(dt)
 
         -- Bottom
         if pos.y - r < self.boundsMin.y then
-            pos.y = self.boundsMin.y + r
-            vel.y = -vel.y
+            pos = util.vector2(pos.x, self.boundsMin.y + r)
+            vel = util.vector2(vel.x, -vel.y)
             if self.onEdgeHit then
                 self.onEdgeHit(ball.id, "bottom")
             end
@@ -154,8 +154,8 @@ function PachinkoPhysics:advanceSimulation(dt)
 
         -- Top
         if pos.y + r > self.boundsMax.y then
-            pos.y = self.boundsMax.y - r
-            vel.y = -vel.y
+            pos = util.vector2(pos.x, self.boundsMax.y - r)
+            vel = util.vector2(vel.x, -vel.y)
             if self.onEdgeHit then
                 self.onEdgeHit(ball.id, "top")
             end

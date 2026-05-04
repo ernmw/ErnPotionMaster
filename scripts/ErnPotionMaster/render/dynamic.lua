@@ -21,7 +21,7 @@ local search                    = require("scripts.ErnPotionMaster.search")
 
 ---@class Renderable
 ---@field id number
----@field layout fun(dt: number, prevLayout: table|nil): table|nil|false
+---@field layout fun(dt: number, id: number): table|nil|false
 
 ---@class DynamicContainer
 ---@field name string
@@ -91,8 +91,7 @@ function DynamicContainerMethods:Render(dt)
     local dirty = false
 
     for _, r in ipairs(self.renderables) do
-        local prev = self._layoutCache[r.id]
-        local result = r.layout(dt, prev)
+        local result = r.layout(dt, r.id)
 
         if result == false then
             -- remove

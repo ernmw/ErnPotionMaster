@@ -88,14 +88,18 @@ end
 
 ---@enum StateClass
 local StateClass = {
+    --- First, pick your effect.
+    EFFECT_SELECTION = 1,
+    -- Pick 2 to 4 ingredients
+    INGREDIENT_SELECTION = 2,
     --- The player is picking their shot.
-    TARGET_SELECTION = 1,
+    TARGET_SELECTION = 3,
     --- We're watching the shot play out.
-    PHYSICS_SIMULATION = 2,
+    PHYSICS_SIMULATION = 4,
     --- The shot is done, do Effect Score flourishes.
-    SHOT_DONE = 3,
+    SHOT_DONE = 5,
     --- The last shot is done, make the potion.
-    FINISHED = 4,
+    FINISHED = 6,
 }
 
 ---@enum PinClass
@@ -143,7 +147,7 @@ local function onStopAlchemy()
     settings.debugPrint("stop alchemy")
     -- do cleanup
     gameState = nil
-    board:Reset()
+    board.reset()
     if window then
         window:destroy()
         window = nil
@@ -331,29 +335,38 @@ local function addEffectPins(pins, pestleStrength, ingredientRecord)
 end
 
 local function resetBoard(ingredientObjects, toolStrengths)
-    if not gameState then
-        error("gameState is nil")
-    end
-    gameState.ballID = 1
-    gameState.pins = {}
-    gameState.physics = physics.new(const.BoardSize)
+    gameState = {
+        -- todo: finish
+        isPotion = true,
+        ballID = 1,
+        currentState = StateClass.TARGET_SELECTION,
+        effectScores = {},
+        pendingIngredientRecords = {},
+        physics = physics.new(const.BoardSize),
+        pins = {},
+        toolStrengths = toolStrengths,
+        currentIngredientRecord = nil,
+    }
     gameState.physics.onEdgeHit = onEdgeHit
     gameState.physics.onPinHit = onPinHit
-    gameState.toolStrengths = toolStrengths
 
-    gameState.pendingIngredientRecords = {}
     for _, obj in ipairs(ingredientObjects) do
         local record = types.Ingredient.record(obj)
         settings.debugPrint("ingredient: " .. tostring(record.name))
         table.insert(gameState.pendingIngredientRecords, record)
-        obj:remove(1)
+        -- obj:remove(1) -- TODO: this doesn't work for some reason
     end
+
     gameState.currentIngredientRecord = table.remove(gameState.pendingIngredientRecords, 1)
+    if not gameState.currentIngredientRecord then
+        error("gameState.currentIngredientRecord is nil")
+    end
 
     local pinCounts = {}
     pinCounts[PinClass.BUFFER] = 10
     pinCounts = addToolPins(pinCounts, gameState.toolStrengths)
-    pinCounts = addEffectPins(pinCounts, gameState.toolStrengths[PinClass.MORTAR] or 0, ingredientObjects)
+    pinCounts = addEffectPins(pinCounts, gameState.toolStrengths[PinClass.MORTAR] or 0,
+        gameState.currentIngredientRecord)
 
     local totalPins = 0
     for pinType, count in ipairs(pinCounts) do
@@ -364,18 +377,18 @@ local function resetBoard(ingredientObjects, toolStrengths)
     ---@type Vector2[]
     local potentialSpots = placepins(const.BoardSize:emul(util.vector2(1, 0.85)), const.PinRadius, totalPins)
 
-    local id = 100
+    local pinID = 100
     -- assign pins to spots
     for pinType, _ in pairs(pinCounts) do
-        id = id + 1
+        pinID = pinID + 1
         ---@type Vector2?
         local position = table.remove(potentialSpots)
         if position then
-            gameState.pins[id] = { class = pinType, ID = id, popped = false }
-            gameState.physics:addPin(id, position + topOffset, 0.9, const.PinRadius)
+            gameState.pins[pinID] = { class = pinType, ID = pinID, popped = false }
+            gameState.physics:addPin(pinID, position + topOffset, 0.9, const.PinRadius)
             board.pins:AddRenderable({
-                id = id,
-                layout = function(dt, prevLayout)
+                id = pinID,
+                layout = function(dt, id)
                     local pin = gameState.physics.pins[id]
                     if pin then
                         return {
@@ -405,22 +418,19 @@ local function shootBall(directionVec)
     if gameState.currentState ~= StateClass.TARGET_SELECTION then
         error("gameState.currentState is not Target Selection")
     end
-    if not gameState.currentIngredientRecord then
-        error("gameState.currentIngredientRecord is nil")
-    end
     gameState.ballID = gameState.ballID + 1
     local ballID = gameState.ballID
     gameState.physics:addBall(ballID, shootPosition, directionVec, 3, 1, const.BallRadius)
     board.balls:AddRenderable({
         id = ballID,
-        layout = function(dt, prevLayout)
-            local ball = gameState.physics.balls[ballID]
+        layout = function(dt, id)
+            local ball = gameState.physics.balls[id]
             if ball then
                 return {
                     template = templates.ball,
-                    name = "ball_" .. tostring(ballID),
+                    name = "ball_" .. tostring(id),
                     props = {
-                        position = gameState.physics.balls[ballID].position
+                        position = gameState.physics.balls[id].position
                     }
                 }
             else
@@ -434,12 +444,15 @@ end
 local function targetSelection(dt)
     -- TODO: fill out stub
     shootBall(util.vector2(math.random(), math.random()))
+    gameState.currentState = StateClass.PHYSICS_SIMULATION
+    board.onFrame(dt)
 end
 local function physicsSimulation(dt)
     if not gameState then
         error("gameState is nil")
     end
     gameState.physics:advanceSimulation(dt)
+    board.onFrame(dt)
 end
 local function shotDone(dt)
     -- todo: set up next shot?
@@ -461,13 +474,13 @@ local stateHandlers = {
 local function openWindow()
     window = ui.create({
         layer = "Windows",
-        type = ui.TYPE.Image,
-        template = interfaces.MWUI.templates.borders,
+        type = ui.TYPE.Container,
+        template = interfaces.MWUI.templates.boxTransparent,
         props = {
-            size = const.BoardSize + util.vector2(32, 32),
+            --size = const.BoardSize + util.vector2(32, 32),
             anchor = util.vector2(0.5, 0.5),
             relativePosition = util.vector2(0.5, 0.5),
-            resource = ui.texture({ path = "black" }),
+            --resource = ui.texture({ path = "black" }),
         },
         content = ui.content {
             board.boardElement
@@ -477,8 +490,7 @@ end
 
 local function onFrame(dt)
     if gameState then
-        stateHandlers[gameState.currentState](dt)
-        board.onFrame(dt)
+        stateHandlers[gameState.currentState](core.getRealFrameDuration())
     end
 end
 
@@ -496,7 +508,7 @@ local function onInit(data)
 
     local toolStrengths = getToolStrengths()
 
-    board:Reset()
+    board.reset()
     resetBoard(ingredients, toolStrengths)
     openWindow()
 end

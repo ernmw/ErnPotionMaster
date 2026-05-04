@@ -27,8 +27,7 @@ local pins         = dynamic.NewDynamicContainer("pins", {})
 local balls        = dynamic.NewDynamicContainer("balls", {})
 local boardElement = ui.create {
     name = 'board',
-    type = ui.TYPE.Container,
-    template = interfaces.MWUI.templates.boxTransparent,
+    type = ui.TYPE.Widget,
     props = {
         size = const.BoardSize,
         visible = true,
@@ -44,7 +43,7 @@ local minUpdate    = 0.01
 local ballDT       = 0
 local pinDT        = 0
 local function onFrame(dt)
-    if not boardElement.props.layout.visible then
+    if not boardElement.layout.props.visible then
         ballDT = minUpdate
         pinDT  = minUpdate
         return
@@ -58,8 +57,10 @@ local function onFrame(dt)
     elseif ballDT > pinDT then
         balls:Render(ballDT)
         ballDT = 0
+        boardElement:update()
     else
         pins:Render(pinDT)
+        boardElement:update()
         pinDT = 0
     end
 end
@@ -69,4 +70,8 @@ return {
     balls = balls,
     pins = pins,
     onFrame = onFrame,
+    reset = function()
+        balls:Reset()
+        pins:Reset()
+    end
 }

@@ -369,7 +369,7 @@ local function resetBoard(ingredientObjects, toolStrengths)
         gameState.currentIngredientRecord)
 
     local totalPins = 0
-    for pinType, count in ipairs(pinCounts) do
+    for _, count in pairs(pinCounts) do
         totalPins = totalPins + count
     end
 
@@ -379,32 +379,34 @@ local function resetBoard(ingredientObjects, toolStrengths)
 
     local pinID = 100
     -- assign pins to spots
-    for pinType, _ in pairs(pinCounts) do
-        pinID = pinID + 1
-        ---@type Vector2?
-        local position = table.remove(potentialSpots)
-        if position then
-            gameState.pins[pinID] = { class = pinType, ID = pinID, popped = false }
-            gameState.physics:addPin(pinID, position + topOffset, 0.9, const.PinRadius)
-            board.pins:AddRenderable({
-                id = pinID,
-                layout = function(dt, id)
-                    local pin = gameState.physics.pins[id]
-                    if pin then
-                        return {
-                            template = templates.pin,
-                            name = "pin_" .. tostring(id),
-                            props = {
-                                position = gameState.physics.pins[id].position,
-                                alpha = pin.enabled and 1 or 0.2
+    for pinType, count in pairs(pinCounts) do
+        for i = 1, count do
+            pinID = pinID + 1
+            ---@type Vector2?
+            local position = table.remove(potentialSpots)
+            if position then
+                gameState.pins[pinID] = { class = pinType, ID = pinID, popped = false }
+                gameState.physics:addPin(pinID, position + topOffset, 0.9, const.PinRadius)
+                board.pins:AddRenderable({
+                    id = pinID,
+                    layout = function(dt, id)
+                        local pin = gameState.physics.pins[id]
+                        if pin then
+                            return {
+                                template = templates.pinWidget,
+                                name = "pin_" .. tostring(id),
+                                props = {
+                                    position = gameState.physics.pins[id].position,
+                                    alpha = pin.enabled and 1 or 0.2
+                                }
                             }
-                        }
-                    else
-                        -- delete the pin from renderer
-                        return false
+                        else
+                            -- delete the pin from renderer
+                            return false
+                        end
                     end
-                end
-            })
+                })
+            end
         end
     end
 end
@@ -427,7 +429,7 @@ local function shootBall(directionVec)
             local ball = gameState.physics.balls[id]
             if ball then
                 return {
-                    template = templates.ball,
+                    template = templates.ballWidget,
                     name = "ball_" .. tostring(id),
                     props = {
                         position = gameState.physics.balls[id].position

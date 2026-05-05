@@ -22,45 +22,60 @@ local util       = require("openmw.util")
 local dynamic    = require("scripts.ErnPotionMaster.render.dynamic")
 local interfaces = require('openmw.interfaces')
 
-local pinWidget  = {
-    type = ui.TYPE.Widget,
-    props = {
-        size = const.PinSize,
-        anchor = util.vector2(0.5, 0.5),
-    },
-    content = {
-        ui.content({
-            type = ui.TYPE.Image,
-            props = {
-                relativeSize = util.vector2(1, 1),
-                resource = ui.texture {
-                    path = "textures\\ErnPotionMaster\\circle.png"
-                },
-            },
-            events = {},
-        })
+local function pinWidget()
+    return {
+        type = ui.TYPE.Widget,
+        props = {
+            size = const.PinSize,
+        },
+        content = {
+            ui.content(
+                {
+                    template = interfaces.MWUI.templates.textNormal,
+                    props = {
+                        text = "pin",
+                        anchor = util.vector2(0.5, 0.5)
+                    }
+                }, {
+                    type = ui.TYPE.Image,
+                    props = {
+                        relativeSize = util.vector2(1, 1),
+                        resource = ui.texture {
+                            path = "textures\\ErnPotionMaster\\circle.png"
+                        },
+                    },
+                    events = {},
+                })
+        }
     }
-}
+end
 
-local ballWidget = {
-    type = ui.TYPE.Widget,
-    props = {
-        size = const.BallSize,
-        anchor = util.vector2(0.5, 0.5),
-    },
-    content = {
-        ui.content({
-            type = ui.TYPE.Image,
-            props = {
-                relativeSize = util.vector2(1, 1),
-                resource = ui.texture {
-                    path = "textures\\ErnPotionMaster\\circle-full.png"
+local function ballWidget()
+    return {
+        type = ui.TYPE.Widget,
+        props = {
+            size = const.BallSize,
+        },
+        content = {
+            ui.content({
+                template = interfaces.MWUI.templates.textNormal,
+                props = {
+                    text = "ball",
+                    anchor = util.vector2(0.5, 0.5)
+                }
+            }, {
+                type = ui.TYPE.Image,
+                props = {
+                    relativeSize = util.vector2(1, 1),
+                    resource = ui.texture {
+                        path = "textures\\ErnPotionMaster\\circle-full.png"
+                    },
                 },
-            },
-            events = {},
-        })
+                events = {},
+            })
+        }
     }
-}
+end
 
 return {
     pinWidget = pinWidget,

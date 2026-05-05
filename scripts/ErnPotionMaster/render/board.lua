@@ -21,6 +21,8 @@ local ui           = require("openmw.ui")
 local util         = require("openmw.util")
 local dynamic      = require("scripts.ErnPotionMaster.render.dynamic")
 local interfaces   = require('openmw.interfaces')
+local aux_util     = require('openmw_aux.util')
+local settings     = require("scripts.ErnPotionMaster.settings.settings")
 
 local pins         = dynamic.NewDynamicContainer("pins", {})
 -- balls are in their own container because they change often.
@@ -31,15 +33,35 @@ local boardElement = ui.create({
     props = {
         size = const.BoardSize,
         visible = true,
-        --propagateEvents = false,
     },
-    content = ui.content({
-        pins.element,
-        balls.element,
-    })
+    content = ui.content
+        {
+            {
+                template = interfaces.MWUI.templates.textNormal,
+                props = {
+                    text = "board",
+                }
+            },
+            {
+                name = 'pins',
+                type = ui.TYPE.Widget,
+                props = {
+                    relativeSize = util.vector2(1, 1),
+                },
+                content = ui.content { pins.content }
+            },
+            {
+                name = 'balls',
+                type = ui.TYPE.Widget,
+                props = {
+                    relativeSize = util.vector2(1, 1),
+                },
+                content = ui.content { balls.content }
+            }
+        }
 })
 
-local minUpdate    = 0.01
+local minUpdate    = 1 / 63
 local ballDT       = 0
 local pinDT        = 0
 local function onFrame(dt)
@@ -55,12 +77,18 @@ local function onFrame(dt)
     if ballDT < minUpdate and pinDT < minUpdate then
         return
     elseif ballDT > pinDT then
-        balls:Render(ballDT)
+        if balls:Render(ballDT) then
+            --settings.debugPrint("balls: " .. aux_util.deepToString(balls.content, 6))
+            boardElement.layout.content["balls"].content = ui.content { balls.content }
+            boardElement:update()
+        end
         ballDT = 0
-        boardElement:update()
     else
-        pins:Render(pinDT)
-        boardElement:update()
+        if pins:Render(pinDT) then
+            --settings.debugPrint("pins: " .. aux_util.deepToString(pins.content, 6))
+            boardElement.layout.content["pins"].content = ui.content { pins.content }
+            boardElement:update()
+        end
         pinDT = 0
     end
 end

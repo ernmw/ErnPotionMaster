@@ -398,11 +398,15 @@ local function resetBoard(ingredientObjects, toolStrengths)
                         local pin = gameState.physics.pins[id]
                         if pin then
                             return {
-                                template = templates.pinWidget,
+                                type = ui.TYPE.Container,
                                 name = "pin_" .. tostring(id),
                                 props = {
+                                    anchor = util.vector2(0.5, 0.5),
                                     position = gameState.physics.pins[id].position,
                                     alpha = pin.enabled and 1 or 0.2
+                                },
+                                content = ui.content {
+                                    templates.pinWidget()
                                 }
                             }
                         else
@@ -434,10 +438,14 @@ local function shootBall(directionVec)
             local ball = gameState.physics.balls[id]
             if ball then
                 return {
-                    template = templates.ballWidget,
+                    type = ui.TYPE.Container,
                     name = "ball_" .. tostring(id),
                     props = {
+                        anchor = util.vector2(0.5, 0.5),
                         position = gameState.physics.balls[id].position
+                    },
+                    content = ui.content {
+                        templates.ballWidget()
                     }
                 }
             else

@@ -26,7 +26,7 @@ local const                     = require("scripts.ErnPotionMaster.const")
 
 ---@class DynamicContainer
 ---@field name string
----@field element userdata
+---@field content table?
 ---@field renderables Renderable[]
 ---@field _layoutCache table<number, table> -- id -> layout
 ---@field _order number[]                  -- stable ordered ids
@@ -56,17 +56,9 @@ end
 ---@param renderables Renderable[]
 ---@return DynamicContainer
 local function NewDynamicContainer(name, renderables)
-    local elem = ui.create({
-        name = name,
-        type = ui.TYPE.Widget,
-        props = {
-            relativeSize = util.vector2(1, 1),
-        },
-        content = ui.content {},
-    })
     local new = {
         name = name,
-        element = elem,
+        content = {},
         renderables = {},
         _layoutCache = {},
         _order = {},
@@ -89,6 +81,7 @@ end
 
 ---@param self DynamicContainer
 ---@param dt number
+---@return boolean true if changed
 function DynamicContainerMethods:Render(dt)
     local dirty = false
 
@@ -108,7 +101,7 @@ function DynamicContainerMethods:Render(dt)
     end
 
     if not dirty then
-        return -- nothing changed, skip UI update entirely
+        return false -- nothing changed, skip UI update entirely
     end
 
     -- rebuild only when something actually changed
@@ -121,8 +114,8 @@ function DynamicContainerMethods:Render(dt)
         end
     end
 
-    self.element.layout.content = ui.content(newContent)
-    self.element:update()
+    self.content = newContent
+    return true
 end
 
 return {

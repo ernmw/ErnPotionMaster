@@ -18,6 +18,8 @@ content=ErnPotionMaster.omwscripts
 - ping.mp3 by jolup123 -- https://freesound.org/s/668790/ -- License: Creative Commons 0
 - cancel.wav by pierrecartoons1979 -- https://freesound.org/s/90119/ -- License: Attribution NonCommercial 3.0
 - https://labs.mapbox.com/maki-icons/
+- Virtual List by Greatness7 (MIT)
+- PCP myui by Qlonever (MIT)
 
 ## Development
 

@@ -109,7 +109,7 @@ local function effectScoreLayout(effectScore)
                     resource = ui.texture {
                         path = effectScore.magicEffect.effect.icon
                     },
-                    size = util.vector2(62, 62)
+                    size = util.vector2(16, 16)
                 },
             },
             myui.padWidget(4, 0),
@@ -143,26 +143,21 @@ end
 
 ---@class EffectScoreContainer
 ---@field scores EffectScore[]
+---@field element any a UI element
 ---@field _dirty boolean
----@field _cachedLayout any
 ---@field modifyEffectScore fun(self: EffectScoreContainer, magicEffect : MagicEffectWithParams, modFn: fun(original:EffectScore): EffectScore?)
 
 local EffectScoreContainer   = {}
 EffectScoreContainer.__index = EffectScoreContainer
 
-function EffectScoreContainer:layout()
-    if not self._dirty then
-        return self._cachedLayout
-    end
-    self._dirty = false
-
+function EffectScoreContainer:_layout()
     local contents = {}
 
     for _, es in ipairs(self.scores) do
         table.insert(contents, effectScoreLayout(es))
     end
 
-    self._cachedLayout = {
+    return {
         type = ui.TYPE.Flex,
         name = "effectScoresColumn",
         props = {
@@ -172,8 +167,6 @@ function EffectScoreContainer:layout()
         },
         content = ui.content(contents)
     }
-
-    return self._cachedLayout
 end
 
 ---@return EffectScoreContainer
@@ -182,7 +175,9 @@ function EffectScoreContainer.new()
 
     self.scores = {}
     self._dirty = false
-    self._cachedLayout = self:layout()
+    local layout = self:_layout()
+    settings.debugPrint(aux_util.deepToString(layout, 3))
+    self.element = ui.create(layout)
 
     return self
 end
@@ -216,7 +211,7 @@ function EffectScoreContainer:modifyEffectScore(magicEffect, modFn)
     if not found then
         local newScore = modFn({ magicEffect = magicEffect, score = 0, multiplier = 0, deltaVFX = 0 })
         if newScore then
-            settings.debugPrint("adding new effectScore " .. tostring(newScore.magicEffect.id))
+            settings.debugPrint("adding new effectScore " .. aux_util.deepToString(newScore, 3))
             table.insert(self.scores, newScore)
         end
     end
@@ -243,6 +238,11 @@ function EffectScoreContainer:onFrame(dt)
         end
     end
     self._dirty = stillDecaying or self._dirty
+    if self._dirty then
+        self.element.layout = self:_layout()
+        self.element:update()
+        self._dirty = false
+    end
 end
 
 return EffectScoreContainer

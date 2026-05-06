@@ -473,16 +473,31 @@ local function openWindow()
             relativePosition = util.vector2(0.5, 0.5),
             --resource = ui.texture({ path = "black" }),
         },
-        content = ui.content({
-            board.boardElement,
-            gameState.effectScores:layout()
-        })
+        content = ui.content {
+            {
+                type = ui.TYPE.Flex,
+                props = {
+                    horizontal = true,
+                    align = ui.ALIGNMENT.Center,
+                    arrange = ui.ALIGNMENT.Center,
+                    --anchor = util.vector2(0.5, 0.5),
+                    --relativePosition = util.vector2(0.5, 0.5),
+                },
+                content = ui.content {
+                    board.boardElement,
+                    gameState.effectScores.element
+                },
+            },
+        }
+
     })
 end
 
-local function onFrame(dt)
+local function onFrame()
     if gameState then
-        stateHandlers[gameState.currentState](core.getRealFrameDuration())
+        local dt = core.getRealFrameDuration()
+        stateHandlers[gameState.currentState](dt)
+        gameState.effectScores:onFrame(dt)
     end
 end
 

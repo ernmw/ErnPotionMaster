@@ -47,25 +47,19 @@ function RenderBoard.new()
     local self = setmetatable({}, RenderBoard)
 
     self._pinsElement = ui.create {
-        layer = "Modal",
-        --name = 'pins',
+        name = 'pins',
         type = ui.TYPE.Widget,
         props = {
             size = const.BoardSize,
-            relativePosition = util.vector2(0.5, 0.5),
-            anchor = util.vector2(0.5, 0.5)
         },
         content = ui.content {}
     }
 
     self._ballsElement = ui.create {
-        layer = "Modal",
-        --name = 'balls',
+        name = 'balls',
         type = ui.TYPE.Widget,
         props = {
             size = const.BoardSize,
-            relativePosition = util.vector2(0.5, 0.5),
-            anchor = util.vector2(0.5, 0.5)
         },
         content = ui.content {}
     }
@@ -76,7 +70,7 @@ function RenderBoard.new()
 
     -- Board root element
     self.boardElement = ui.create({
-        layer = "DragAndDrop",
+        name = "board",
         type = ui.TYPE.Widget,
         props = {
             size = const.BoardSize,
@@ -99,8 +93,8 @@ function RenderBoard.new()
                     anchor = util.vector2(1, 1)
                 }
             },
-            --self._pinsElement,
-            --self._ballsElement
+            self._pinsElement,
+            self._ballsElement
         }
     })
 

@@ -34,6 +34,8 @@ local settings      = require("scripts.ErnPotionMaster.settings.settings")
 local physics       = require("scripts.ErnPotionMaster.physics.pachinko")
 local interfaces    = require('openmw.interfaces')
 local shuffle       = require("scripts.ErnPotionMaster.shuffle")
+local aux_util      = require('openmw_aux.util')
+local renderBoard   = require("scripts.ErnPotionMaster.render.board")
 local templates     = require("scripts.ErnPotionMaster.render.templates")
 
 local shootPosition = util.vector2(0.5, 0.05):emul(const.BoardSize)
@@ -148,7 +150,7 @@ local function onStopAlchemy()
     settings.debugPrint("stop alchemy")
     -- do cleanup
     gameState = nil
-    if board then board.reset() end
+    if board then board:reset() end
     if window then
         window:destroy()
         window = nil
@@ -177,6 +179,9 @@ local function modifyEffectScore(magicEffect, modFn)
     if not gameState then
         error("modifyEffectScore(): gameState is nil")
     end
+    if not magicEffect then
+        error("modifyEffectScore(): magicEffect is nil")
+    end
     local found = false
     --- find the matching effect, if any
     for idx, effect in ipairs(gameState.effectScores) do
@@ -185,8 +190,10 @@ local function modifyEffectScore(magicEffect, modFn)
             effect.magicEffect.id == magicEffect.id then
             local newScore = modFn(effect)
             if newScore then
+                settings.debugPrint("modifying effectScore " .. tostring(effect.magicEffect.name))
                 gameState.effectScores[idx] = newScore
             else
+                settings.debugPrint("deleting effectScore " .. tostring(effect.magicEffect.name))
                 table.remove(gameState.effectScores, idx)
             end
             found = true
@@ -197,6 +204,7 @@ local function modifyEffectScore(magicEffect, modFn)
         ---@type EffectScore
         local newScore = modFn({ magicEffect = magicEffect, score = 0, multiplier = 0 })
         if newScore then
+            settings.debugPrint("adding new effectScore " .. tostring(newScore.magicEffect.name))
             table.insert(gameState.effectScores, newScore)
         end
     end
@@ -224,6 +232,7 @@ end
 local function effectPinHit(original)
     original.multiplier = original.multiplier + 1
     original.score = original.score + original.multiplier
+    settings.debugPrint("effect " .. tostring(original.magicEffect.id) .. " score is now " .. tostring(original.score))
     return original
 end
 
@@ -273,8 +282,11 @@ local function onPinHit(ballId, pinId)
     elseif gameState.pins[pinId].class == PinClass.ALEMBIC then
         -- reduce unintentional
         for i, effectScore in ipairs(shuffle(gameState.effectScores)) do
+            if not effectScore.magicEffect then
+                error("no magicEffect in effectScore: " .. aux_util.deepToString(effectScore, 3))
+            end
             if effectScore.magicEffect.effect.harmful == gameState.isPotion then
-                modifyEffectScore(effectScore.effect, function(original)
+                modifyEffectScore(effectScore, function(original)
                     local strength = gameState.toolStrengths[PinClass.ALEMBIC]
                     original.score = original.score / (strength + 1)
                     return original
@@ -285,8 +297,11 @@ local function onPinHit(ballId, pinId)
     elseif gameState.pins[pinId].class == PinClass.RETORT then
         -- increase intentional
         for i, effectScore in ipairs(shuffle(gameState.effectScores)) do
+            if not effectScore.magicEffect then
+                error("no magicEffect in effectScore: " .. aux_util.deepToString(effectScore, 3))
+            end
             if effectScore.magicEffect.effect.harmful ~= gameState.isPotion then
-                modifyEffectScore(effectScore.effect, function(original)
+                modifyEffectScore(effectScore, function(original)
                     local strength = gameState.toolStrengths[PinClass.RETORT]
                     original.score = original.score * (strength + 1)
                     return original
@@ -337,7 +352,7 @@ end
 
 local function resetBoard(ingredientObjects, toolStrengths)
     settings.debugPrint("resetBoard() called")
-    board = require("scripts.ErnPotionMaster.render.board")
+    board = renderBoard.new()
     settings.debugPrint("finished importing render board")
 
     gameState = {
@@ -347,7 +362,8 @@ local function resetBoard(ingredientObjects, toolStrengths)
         currentState = StateClass.TARGET_SELECTION,
         effectScores = {},
         pendingIngredientRecords = {},
-        physics = physics.new(const.BoardSize),
+        -- add a little extra height so the ball can drop below
+        physics = physics.new(const.BoardSize + util.vector2(0, 1.5 * const.BallSize.y)),
         pins = {},
         toolStrengths = toolStrengths,
         currentIngredientRecord = nil,
@@ -368,7 +384,7 @@ local function resetBoard(ingredientObjects, toolStrengths)
     end
 
     local pinCounts = {}
-    pinCounts[PinClass.BUFFER] = 10
+    pinCounts[PinClass.BUFFER] = 5
     pinCounts = addToolPins(pinCounts, gameState.toolStrengths)
     pinCounts = addEffectPins(pinCounts, gameState.toolStrengths[PinClass.MORTAR] or 0,
         gameState.currentIngredientRecord)
@@ -379,8 +395,9 @@ local function resetBoard(ingredientObjects, toolStrengths)
     end
 
     local topOffset = util.vector2(0, 0.15)
+    local midTopOffsetBorder = const.BoardSize:emul(util.vector2(0, topOffset.y))
     ---@type Vector2[]
-    local potentialSpots = placepins(const.BoardSize:emul(util.vector2(1, 0.85)), const.PinRadius, totalPins)
+    local potentialSpots = placepins(const.BoardSize:emul(util.vector2(1, 1 - topOffset.y)), const.PinRadius, totalPins)
 
     local pinID = 100
     -- assign pins to spots
@@ -391,23 +408,20 @@ local function resetBoard(ingredientObjects, toolStrengths)
             local position = table.remove(potentialSpots)
             if position then
                 gameState.pins[pinID] = { class = pinType, ID = pinID, popped = false }
-                gameState.physics:addPin(pinID, position + topOffset, 0.9, const.PinRadius)
+                gameState.physics:addPin(pinID, position + midTopOffsetBorder, 0.9, const.PinRadius)
                 board.pins:AddRenderable({
                     id = pinID,
                     layout = function(dt, id)
                         local pin = gameState.physics.pins[id]
-                        if pin then
+                        if pin and not gameState.pins[id].popped then
                             return {
-                                type = ui.TYPE.Container,
-                                name = "pin_" .. tostring(id),
+                                type = ui.TYPE.Image,
                                 props = {
+                                    position = pin.position,
                                     anchor = util.vector2(0.5, 0.5),
-                                    position = gameState.physics.pins[id].position,
-                                    alpha = pin.enabled and 1 or 0.2
+                                    size = const.BallSize,
+                                    resource = templates.bufferPinTexture,
                                 },
-                                content = ui.content {
-                                    templates.pinWidget()
-                                }
                             }
                         else
                             -- delete the pin from renderer
@@ -431,22 +445,20 @@ local function shootBall(directionVec)
     end
     gameState.ballID = gameState.ballID + 1
     local ballID = gameState.ballID
-    gameState.physics:addBall(ballID, shootPosition, directionVec, 3, 1, const.BallRadius)
+    gameState.physics:addBall(ballID, shootPosition, directionVec, 1, 1, const.BallRadius)
     board.balls:AddRenderable({
         id = ballID,
         layout = function(dt, id)
             local ball = gameState.physics.balls[id]
             if ball then
                 return {
-                    type = ui.TYPE.Container,
-                    name = "ball_" .. tostring(id),
+                    type = ui.TYPE.Image,
                     props = {
+                        position = ball.position,
                         anchor = util.vector2(0.5, 0.5),
-                        position = gameState.physics.balls[id].position
+                        size = const.BallSize,
+                        resource = templates.ballTexture,
                     },
-                    content = ui.content {
-                        templates.ballWidget()
-                    }
                 }
             else
                 -- delete the ball from renderer
@@ -460,14 +472,16 @@ local function targetSelection(dt)
     -- TODO: fill out stub
     shootBall(util.vector2(math.random(), math.random()))
     gameState.currentState = StateClass.PHYSICS_SIMULATION
-    board.onFrame(dt)
+    board:onFrame(dt)
+    window:update()
 end
 local function physicsSimulation(dt)
     if not gameState then
         error("gameState is nil")
     end
     gameState.physics:advanceSimulation(dt)
-    board.onFrame(dt)
+    board:onFrame(dt)
+    window:update()
 end
 local function shotDone(dt)
     -- todo: set up next shot?
@@ -492,7 +506,7 @@ local function openWindow()
         type = ui.TYPE.Container,
         template = interfaces.MWUI.templates.boxTransparent,
         props = {
-            --size = const.BoardSize + util.vector2(32, 32),
+            --size = const.BoardSize + util.vector2(const.BoardSize.x, 32),
             anchor = util.vector2(0.5, 0.5),
             relativePosition = util.vector2(0.5, 0.5),
             --resource = ui.texture({ path = "black" }),

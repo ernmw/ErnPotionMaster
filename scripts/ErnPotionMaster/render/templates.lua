@@ -58,12 +58,6 @@ local function ballWidget()
         },
         content = {
             ui.content({
-                template = interfaces.MWUI.templates.textNormal,
-                props = {
-                    text = "ball",
-                    anchor = util.vector2(0.5, 0.5)
-                }
-            }, {
                 type = ui.TYPE.Image,
                 props = {
                     relativeSize = util.vector2(1, 1),
@@ -79,5 +73,11 @@ end
 
 return {
     pinWidget = pinWidget,
-    ballWidget = ballWidget
+    ballWidget = ballWidget,
+    ballTexture = ui.texture {
+        path = "textures\\ErnPotionMaster\\circle-full.png"
+    },
+    bufferPinTexture = ui.texture {
+        path = "textures\\ErnPotionMaster\\circle.png"
+    },
 }

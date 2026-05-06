@@ -25,7 +25,7 @@ local const                     = require("scripts.ErnPotionMaster.const")
 ---@field layout fun(dt: number, id: number): table|nil|false
 
 ---@class DynamicContainer
----@field name string
+---@field element table
 ---@field content table?
 ---@field renderables Renderable[]
 ---@field _layoutCache table<number, table> -- id -> layout
@@ -52,13 +52,12 @@ function DynamicContainerMethods:AddRenderable(renderable)
     table.insert(self._order, insertIndex, renderable.id)
 end
 
----@param name string
+---@param element table
 ---@param renderables Renderable[]
 ---@return DynamicContainer
-local function NewDynamicContainer(name, renderables)
+local function NewDynamicContainer(element, renderables)
     local new = {
-        name = name,
-        content = {},
+        element = element,
         renderables = {},
         _layoutCache = {},
         _order = {},
@@ -77,6 +76,8 @@ function DynamicContainerMethods:Reset()
     self.renderables = {}
     self._layoutCache = {}
     self._order = {}
+    self.element.layout.content = ui.content({})
+    self.element:update()
 end
 
 ---@param self DynamicContainer
@@ -114,7 +115,8 @@ function DynamicContainerMethods:Render(dt)
         end
     end
 
-    self.content = newContent
+    self.element.layout.content = ui.content(newContent)
+    self.element:update()
     return true
 end
 

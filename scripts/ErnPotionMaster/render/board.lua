@@ -15,91 +15,123 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
-local MOD_NAME     = require("scripts.ErnPotionMaster.ns")
-local const        = require("scripts.ErnPotionMaster.const")
-local ui           = require("openmw.ui")
-local util         = require("openmw.util")
-local dynamic      = require("scripts.ErnPotionMaster.render.dynamic")
-local interfaces   = require('openmw.interfaces')
-local aux_util     = require('openmw_aux.util')
-local settings     = require("scripts.ErnPotionMaster.settings.settings")
+local MOD_NAME      = require("scripts.ErnPotionMaster.ns")
+local const         = require("scripts.ErnPotionMaster.const")
+local ui            = require("openmw.ui")
+local util          = require("openmw.util")
+local dynamic       = require("scripts.ErnPotionMaster.render.dynamic")
+local interfaces    = require('openmw.interfaces')
+local aux_util      = require('openmw_aux.util')
+local settings      = require("scripts.ErnPotionMaster.settings.settings")
 
-local pins         = dynamic.NewDynamicContainer("pins", {})
--- balls are in their own container because they change often.
-local balls        = dynamic.NewDynamicContainer("balls", {})
-local boardElement = ui.create({
-    name = 'board',
-    type = ui.TYPE.Widget,
-    props = {
-        size = const.BoardSize,
-        visible = true,
-    },
-    content = ui.content
-        {
+---@class RenderBoard
+---@field boardElement any
+---@field pins any
+---@field balls any
+---@field private _pinsElement any
+---@field private _ballsElement any
+---@field private _ballDT number
+---@field private _pinDT number
+local RenderBoard   = {}
+RenderBoard.__index = RenderBoard
+
+local MIN_UPDATE    = 1 / 63
+
+---@return RenderBoard
+function RenderBoard.new()
+    local self = setmetatable({}, RenderBoard)
+
+    self._pinsElement = ui.create {
+        layer = "Modal",
+        --name = 'pins',
+        type = ui.TYPE.Widget,
+        props = {
+            size = const.BoardSize,
+            relativePosition = util.vector2(0.5, 0.5),
+            anchor = util.vector2(0.5, 0.5)
+        },
+        content = ui.content {}
+    }
+
+    self._ballsElement = ui.create {
+        layer = "Modal",
+        --name = 'balls',
+        type = ui.TYPE.Widget,
+        props = {
+            size = const.BoardSize,
+            relativePosition = util.vector2(0.5, 0.5),
+            anchor = util.vector2(0.5, 0.5)
+        },
+        content = ui.content {}
+    }
+
+    -- Dynamic containers (instance-specific)
+    self.pins = dynamic.NewDynamicContainer(self._pinsElement, {})
+    self.balls = dynamic.NewDynamicContainer(self._ballsElement, {})
+
+    -- Board root element
+    self.boardElement = ui.create({
+        --name = 'board',
+        type = ui.TYPE.Widget,
+        props = {
+            size = const.BoardSize,
+            visible = true,
+        },
+        content = ui.content {
             {
                 template = interfaces.MWUI.templates.textNormal,
                 props = {
-                    text = "board",
+                    text = "left top",
+                    relativePosition = util.vector2(0, 0),
+                    anchor = util.vector2(0, 0)
                 }
             },
             {
-                name = 'pins',
-                type = ui.TYPE.Widget,
+                template = interfaces.MWUI.templates.textNormal,
                 props = {
-                    relativeSize = util.vector2(1, 1),
-                },
-                content = ui.content { pins.content }
+                    text = "right bottom",
+                    relativePosition = util.vector2(1, 1),
+                    anchor = util.vector2(1, 1)
+                }
             },
-            {
-                name = 'balls',
-                type = ui.TYPE.Widget,
-                props = {
-                    relativeSize = util.vector2(1, 1),
-                },
-                content = ui.content { balls.content }
-            }
+            --self._pinsElement,
+            --self._ballsElement
         }
-})
+    })
 
-local minUpdate    = 1 / 63
-local ballDT       = 0
-local pinDT        = 0
-local function onFrame(dt)
-    if not boardElement.layout.props.visible then
-        ballDT = minUpdate
-        pinDT  = minUpdate
+    -- Timers (instance-specific)
+    self._ballDT = 0
+    self._pinDT = 0
+
+    return self
+end
+
+---@param dt number
+function RenderBoard:onFrame(dt)
+    if not self.boardElement.layout.props.visible then
+        self._ballDT = MIN_UPDATE
+        self._pinDT  = MIN_UPDATE
         return
     end
 
-    ballDT = ballDT + dt
-    pinDT = pinDT + dt
+    self._ballDT = self._ballDT + dt
+    self._pinDT  = self._pinDT + dt
 
-    if ballDT < minUpdate and pinDT < minUpdate then
+    if self._ballDT < MIN_UPDATE and self._pinDT < MIN_UPDATE then
         return
-    elseif ballDT > pinDT then
-        if balls:Render(ballDT) then
-            --settings.debugPrint("balls: " .. aux_util.deepToString(balls.content, 6))
-            boardElement.layout.content["balls"].content = ui.content { balls.content }
-            boardElement:update()
-        end
-        ballDT = 0
+    elseif self._ballDT > self._pinDT then
+        self.balls:Render(self._ballDT)
+        self._ballDT = 0
     else
-        if pins:Render(pinDT) then
-            --settings.debugPrint("pins: " .. aux_util.deepToString(pins.content, 6))
-            boardElement.layout.content["pins"].content = ui.content { pins.content }
-            boardElement:update()
-        end
-        pinDT = 0
+        self.pins:Render(self._pinDT)
+        self._pinDT = 0
     end
 end
 
-return {
-    boardElement = boardElement,
-    balls = balls,
-    pins = pins,
-    onFrame = onFrame,
-    reset = function()
-        balls:Reset()
-        pins:Reset()
-    end
-}
+function RenderBoard:reset()
+    self.balls:Reset()
+    self.pins:Reset()
+    --self.boardElement:update()
+end
+
+return RenderBoard

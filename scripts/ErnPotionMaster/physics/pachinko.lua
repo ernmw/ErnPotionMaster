@@ -1,20 +1,3 @@
---[[
-ErnPotionMaster for OpenMW.
-Copyright (C) 2026 Erin Pentecost
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-]]
 local util = require("openmw.util")
 
 ---@alias ID number
@@ -37,8 +20,7 @@ local util = require("openmw.util")
 ---@class PachinkoPhysics
 ---@field balls table<number, Ball>
 ---@field pins table<number, Pin>
----@field boundsMin Vector2
----@field boundsMax Vector2
+---@field boardSize Vector2
 ---@field gravity Vector2
 ---@field onPinHit fun(ballId: ID, pinId: ID)?
 ---@field onEdgeHit fun(ballId: ID, edge: string)?
@@ -47,18 +29,19 @@ local PachinkoPhysics = {}
 PachinkoPhysics.__index = PachinkoPhysics
 
 -- Constructor
----@param size Vector2
+---@param boardSize Vector2
 ---@return PachinkoPhysics
-function PachinkoPhysics.new(size)
+function PachinkoPhysics.new(boardSize)
     local self = setmetatable({}, PachinkoPhysics)
 
     self.balls = {}
     self.pins = {}
 
-    self.boundsMin = util.vector2(0, 0)
-    self.boundsMax = size
+    self.boardSize = boardSize
 
-    self.gravity = util.vector2(0, -9.8)
+    -- +Y is downward in UI space
+    --self.gravity = util.vector2(0, 9.8)
+    self.gravity = util.vector2(0, 98)
 
     self.onPinHit = nil
     self.onEdgeHit = nil
@@ -124,40 +107,41 @@ function PachinkoPhysics:advanceSimulation(dt)
         local pos = ball.position
         local vel = ball.velocity
         local r = ball.radius
+        local max = self.boardSize
 
-        -- Left
-        if pos.x - r < self.boundsMin.x then
-            pos = util.vector2(self.boundsMin.x + r, pos.y)
-            vel = util.vector2(-vel.x, vel.y)
+        -- Left (x = 0)
+        if pos.x - r < 0 then
+            pos = util.vector2(r, pos.y)
+            vel = util.vector2(-vel.x * ball.elasticity, vel.y)
             if self.onEdgeHit then
                 self.onEdgeHit(ball.id, "left")
             end
         end
 
-        -- Right
-        if pos.x + r > self.boundsMax.x then
-            pos = util.vector2(self.boundsMax.x - r, pos.y)
-            vel = util.vector2(-vel.x, vel.y)
+        -- Right (x = width)
+        if pos.x + r > max.x then
+            pos = util.vector2(max.x - r, pos.y)
+            vel = util.vector2(-vel.x * ball.elasticity, vel.y)
             if self.onEdgeHit then
                 self.onEdgeHit(ball.id, "right")
             end
         end
 
-        -- Bottom
-        if pos.y - r < self.boundsMin.y then
-            pos = util.vector2(pos.x, self.boundsMin.y + r)
-            vel = util.vector2(vel.x, -vel.y)
+        -- Top (y = 0)
+        if pos.y - r < 0 then
+            pos = util.vector2(pos.x, r)
+            vel = util.vector2(vel.x, -vel.y * ball.elasticity)
             if self.onEdgeHit then
-                self.onEdgeHit(ball.id, "bottom")
+                self.onEdgeHit(ball.id, "top")
             end
         end
 
-        -- Top
-        if pos.y + r > self.boundsMax.y then
-            pos = util.vector2(pos.x, self.boundsMax.y - r)
-            vel = util.vector2(vel.x, -vel.y)
+        -- Bottom (y = height)
+        if pos.y + r > max.y then
+            pos = util.vector2(pos.x, max.y - r)
+            vel = util.vector2(vel.x, -vel.y * ball.elasticity)
             if self.onEdgeHit then
-                self.onEdgeHit(ball.id, "top")
+                self.onEdgeHit(ball.id, "bottom")
             end
         end
 

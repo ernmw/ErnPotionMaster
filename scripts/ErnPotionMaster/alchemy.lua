@@ -37,6 +37,7 @@ local shuffle       = require("scripts.ErnPotionMaster.shuffle")
 local aux_util      = require('openmw_aux.util')
 local renderBoard   = require("scripts.ErnPotionMaster.render.board")
 local templates     = require("scripts.ErnPotionMaster.render.templates")
+local effectScore   = require("scripts.ErnPotionMaster.effectscore")
 
 local shootPosition = util.vector2(0.5, 0.05):emul(const.BoardSize)
 
@@ -122,17 +123,14 @@ local PinClass = {
 ---@field ID number
 ---@field popped boolean
 
----@class EffectScore
----@field magicEffect any This is a openmw.core#MagicEffectWithParams
----@field score number The running score for this effect. Persists across shots.
----@field multiplier number The multiplier for each hit this shot. Resets.
+
 
 ---@class GameState
 ---@field currentState StateClass
 ---@field isPotion boolean true if a beneficial potion, false if a poison
 ---@field ballID number
 ---@field pins {number: GamePin}
----@field effectScores EffectScore[]
+---@field effectScores EffectScoreContainer
 ---@field pendingIngredientRecords any[] subsequent balls that haven't been shot yet
 ---@field currentIngredientRecord any? the ingredient matching the current ball
 ---@field physics PachinkoPhysics
@@ -172,43 +170,7 @@ local function getToolStrengths()
     }
 end
 
----comment
----@param magicEffect any This is a openmw.core#MagicEffectWithParams
----@param modFn fun(original:EffectScore): EffectScore
-local function modifyEffectScore(magicEffect, modFn)
-    if not gameState then
-        error("modifyEffectScore(): gameState is nil")
-    end
-    if not magicEffect then
-        error("modifyEffectScore(): magicEffect is nil")
-    end
-    local found = false
-    --- find the matching effect, if any
-    for idx, effect in ipairs(gameState.effectScores) do
-        if effect.magicEffect.affectedAttribute == magicEffect.affectedAttribute and
-            effect.magicEffect.affectedSkill == magicEffect.affectedSkill and
-            effect.magicEffect.id == magicEffect.id then
-            local newScore = modFn(effect)
-            if newScore then
-                settings.debugPrint("modifying effectScore " .. tostring(effect.magicEffect.name))
-                gameState.effectScores[idx] = newScore
-            else
-                settings.debugPrint("deleting effectScore " .. tostring(effect.magicEffect.name))
-                table.remove(gameState.effectScores, idx)
-            end
-            found = true
-            break
-        end
-    end
-    if not found then
-        ---@type EffectScore
-        local newScore = modFn({ magicEffect = magicEffect, score = 0, multiplier = 0 })
-        if newScore then
-            settings.debugPrint("adding new effectScore " .. tostring(newScore.magicEffect.name))
-            table.insert(gameState.effectScores, newScore)
-        end
-    end
-end
+
 
 local function onEdgeHit(ballId, edge)
     if not gameState then
@@ -257,36 +219,36 @@ local function onPinHit(ballId, pinId)
             error("onPinHit(): invalid effect 1")
             return
         end
-        modifyEffectScore(effect, effectPinHit)
+        gameState.effectScores:modifyEffectScore(effect, effectPinHit)
     elseif gameState.pins[pinId].class == PinClass.EFFECT_2 then
         local effect = gameState.currentIngredientRecord.effects[2]
         if not effect then
             error("onPinHit(): invalid effect 2")
             return
         end
-        modifyEffectScore(effect, effectPinHit)
+        gameState.effectScores:modifyEffectScore(effect, effectPinHit)
     elseif gameState.pins[pinId].class == PinClass.EFFECT_3 then
         local effect = gameState.currentIngredientRecord.effects[3]
         if not effect then
             error("onPinHit(): invalid effect 3")
             return
         end
-        modifyEffectScore(effect, effectPinHit)
+        gameState.effectScores:modifyEffectScore(effect, effectPinHit)
     elseif gameState.pins[pinId].class == PinClass.EFFECT_4 then
         local effect = gameState.currentIngredientRecord.effects[4]
         if not effect then
             error("onPinHit(): invalid effect 4")
             return
         end
-        modifyEffectScore(effect, effectPinHit)
+        gameState.effectScores:modifyEffectScore(effect, effectPinHit)
     elseif gameState.pins[pinId].class == PinClass.ALEMBIC then
         -- reduce unintentional
-        for i, effectScore in ipairs(shuffle(gameState.effectScores)) do
-            if not effectScore.magicEffect then
-                error("no magicEffect in effectScore: " .. aux_util.deepToString(effectScore, 3))
+        for i, es in ipairs(shuffle(gameState.effectScores.scores)) do
+            if not es.magicEffect then
+                error("no magicEffect in effectScore: " .. aux_util.deepToString(es, 3))
             end
-            if effectScore.magicEffect.effect.harmful == gameState.isPotion then
-                modifyEffectScore(effectScore, function(original)
+            if es.magicEffect.effect.harmful == gameState.isPotion then
+                gameState.effectScores:modifyEffectScore(es, function(original)
                     local strength = gameState.toolStrengths[PinClass.ALEMBIC]
                     original.score = original.score / (strength + 1)
                     return original
@@ -296,12 +258,12 @@ local function onPinHit(ballId, pinId)
         end
     elseif gameState.pins[pinId].class == PinClass.RETORT then
         -- increase intentional
-        for i, effectScore in ipairs(shuffle(gameState.effectScores)) do
-            if not effectScore.magicEffect then
-                error("no magicEffect in effectScore: " .. aux_util.deepToString(effectScore, 3))
+        for i, es in ipairs(shuffle(gameState.effectScores.scores)) do
+            if not es.magicEffect then
+                error("no magicEffect in effectScore: " .. aux_util.deepToString(es, 3))
             end
-            if effectScore.magicEffect.effect.harmful ~= gameState.isPotion then
-                modifyEffectScore(effectScore, function(original)
+            if es.magicEffect.effect.harmful ~= gameState.isPotion then
+                gameState.effectScores:modifyEffectScore(es, function(original)
                     local strength = gameState.toolStrengths[PinClass.RETORT]
                     original.score = original.score * (strength + 1)
                     return original
@@ -360,7 +322,7 @@ local function resetBoard(ingredientObjects, toolStrengths)
         isPotion = true,
         ballID = 1,
         currentState = StateClass.TARGET_SELECTION,
-        effectScores = {},
+        effectScores = effectScore.new(),
         pendingIngredientRecords = {},
         -- add a little extra height so the ball can drop below
         physics = physics.new(const.BoardSize + util.vector2(0, 1.5 * const.BallSize.y)),

@@ -22,21 +22,23 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -- It maintains a registry of balls and pins indexed by their ID,
 -- and sends this info as necessary to both the pachinko physics board and render board.
 
-local MOD_NAME               = require("scripts.ErnPotionMaster.ns")
-local const                  = require("scripts.ErnPotionMaster.const")
-local ui                     = require("openmw.ui")
-local util                   = require("openmw.util")
-local pself                  = require("openmw.self")
-local core                   = require("openmw.core")
-local types                  = require("openmw.types")
-local placepins              = require("scripts.ErnPotionMaster.placepins")
-local settings               = require("scripts.ErnPotionMaster.settings.settings")
-local physics                = require("scripts.ErnPotionMaster.physics.pachinko")
-local interfaces             = require('openmw.interfaces')
-local shuffle                = require("scripts.ErnPotionMaster.shuffle")
-local aux_util               = require('openmw_aux.util')
-local renderBoard            = require("scripts.ErnPotionMaster.render.board")
-local templates              = require("scripts.ErnPotionMaster.render.templates")
+local MOD_NAME     = require("scripts.ErnPotionMaster.ns")
+local const        = require("scripts.ErnPotionMaster.const")
+local ui           = require("openmw.ui")
+local util         = require("openmw.util")
+local pself        = require("openmw.self")
+local core         = require("openmw.core")
+local types        = require("openmw.types")
+local placepins    = require("scripts.ErnPotionMaster.placepins")
+local settings     = require("scripts.ErnPotionMaster.settings.settings")
+local physics      = require("scripts.ErnPotionMaster.physics.pachinko")
+local interfaces   = require('openmw.interfaces')
+local shuffle      = require("scripts.ErnPotionMaster.shuffle")
+local aux_util     = require('openmw_aux.util')
+local renderBoard  = require("scripts.ErnPotionMaster.render.board")
+local myui         = require("scripts.ErnPotionMaster.pcp.myui")
+local templates    = require("scripts.ErnPotionMaster.render.templates")
+local localization = core.l10n(MOD_NAME)
 
 ---@class MagicEffectWithParams any This is a openmw.core#MagicEffectWithParams
 ---@field affectedAttribute string
@@ -47,20 +49,140 @@ local templates              = require("scripts.ErnPotionMaster.render.templates
 ---@class EffectScore
 ---@field magicEffect MagicEffectWithParams This is a openmw.core#MagicEffectWithParams
 ---@field score number The running score for this effect. Persists across shots.
----@field multiplier number The multiplier for each hit this shot. Resets.
+---@field multiplier number The multiplier for each hit this shot. Resets between shots.
+---@field deltaVFX number A decaying-to-zero value used for special VFX.
+
+local function barLayout(ratio, relativeLength)
+    return {
+        type = ui.TYPE.Widget,
+        name = 'bar',
+        template = interfaces.MWUI.templates.borders,
+        props = {
+            relativeSize = util.vector2(relativeLength or 1, 0),
+            size = util.vector2(0, 8)
+        },
+        content = ui.content {
+            {
+                type = ui.TYPE.Image,
+                name = 'barContainer',
+                props = {
+                    resource = ui.texture { path = 'white' },
+                    relativePosition = util.vector2(0, 0),
+                    relativeSize = util.vector2(1, 1),
+                    alpha = 0.7,
+                    color = util.color.rgb(0.1, 0.1, 0.1),
+                },
+                events = {},
+            },
+            {
+                type = ui.TYPE.Image,
+                name = 'barFill',
+                props = {
+                    resource = ui.texture { path = 'Textures/ErnPotionMaster/horz_gradient.dds' },
+                    anchor = util.vector2(0, 0),
+                    --relativePosition = util.vector2(0, 1),
+                    relativeSize = util.vector2(ratio, 1),
+                    alpha = 0.7,
+                    color = myui.textColors.magic_fill,
+                },
+            },
+        }
+    }
+end
+
+---comment
+---@param effectScore EffectScore
+---@return table
+local function effectScoreLayout(effectScore)
+    return {
+        type = ui.TYPE.Flex,
+        props = {
+            arrange = ui.ALIGNMENT.Start,
+            horizontal = true,
+            autoSize = false,
+            size = util.vector2(const.EffectScorePaneSize.x, 64),
+        },
+        content = ui.content {
+            {
+                type = ui.TYPE.Image,
+                props = {
+                    resource = ui.texture {
+                        path = effectScore.magicEffect.effect.icon
+                    },
+                    size = util.vector2(62, 62)
+                },
+            },
+            myui.padWidget(4, 0),
+            {
+                type = ui.TYPE.Flex,
+                props = {
+                    arrange = ui.ALIGNMENT.Start,
+                    horizontal = false,
+                },
+                external = { grow = 1 },
+                content = ui.content {
+                    {
+                        template = interfaces.MWUI.templates.textHeader,
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = localization("effectScore", {
+                                effectName = effectScore.magicEffect.effect.name,
+                                score = string.format("%.1f", effectScore.score)
+                            }),
+                            textColor = myui.interactiveTextColors.normal.default,
+                            textAlignV = ui.ALIGNMENT.Center,
+                        },
+                    },
+                    myui.padWidget(0, 2),
+                    barLayout(effectScore.score - math.floor(effectScore.score), 1),
+                },
+            }
+        },
+    }
+end
 
 ---@class EffectScoreContainer
 ---@field scores EffectScore[]
+---@field _dirty boolean
+---@field _cachedLayout any
 ---@field modifyEffectScore fun(self: EffectScoreContainer, magicEffect : MagicEffectWithParams, modFn: fun(original:EffectScore): EffectScore?)
 
 local EffectScoreContainer   = {}
 EffectScoreContainer.__index = EffectScoreContainer
+
+function EffectScoreContainer:layout()
+    if not self._dirty then
+        return self._cachedLayout
+    end
+    self._dirty = false
+
+    local contents = {}
+
+    for _, es in ipairs(self.scores) do
+        table.insert(contents, effectScoreLayout(es))
+    end
+
+    self._cachedLayout = {
+        type = ui.TYPE.Flex,
+        name = "effectScoresColumn",
+        props = {
+            horizontal = false,
+            align = ui.ALIGNMENT.Start,
+            arrange = ui.ALIGNMENT.End,
+        },
+        content = ui.content(contents)
+    }
+
+    return self._cachedLayout
+end
 
 ---@return EffectScoreContainer
 function EffectScoreContainer.new()
     local self = setmetatable({}, EffectScoreContainer)
 
     self.scores = {}
+    self._dirty = false
+    self._cachedLayout = self:layout()
 
     return self
 end
@@ -72,6 +194,7 @@ function EffectScoreContainer:modifyEffectScore(magicEffect, modFn)
     if not magicEffect then
         error("modifyEffectScore(): magicEffect is nil")
     end
+    self._dirty = true
     local found = false
     --- find the matching effect, if any
     for idx, effect in ipairs(self.scores) do
@@ -91,12 +214,35 @@ function EffectScoreContainer:modifyEffectScore(magicEffect, modFn)
         end
     end
     if not found then
-        local newScore = modFn({ magicEffect = magicEffect, score = 0, multiplier = 0 })
+        local newScore = modFn({ magicEffect = magicEffect, score = 0, multiplier = 0, deltaVFX = 0 })
         if newScore then
             settings.debugPrint("adding new effectScore " .. tostring(newScore.magicEffect.id))
             table.insert(self.scores, newScore)
         end
     end
+end
+
+local DELTA_VFX_DECAY = 0.1
+
+---@param dt number
+function EffectScoreContainer:onFrame(dt)
+    local decay = DELTA_VFX_DECAY * dt
+    local stillDecaying = false
+
+    for idx, es in ipairs(self.scores) do
+        if self.scores[idx] then
+            if math.abs(es.deltaVFX) <= DELTA_VFX_DECAY then
+                self.scores[idx].deltaVFX = 0
+            elseif es.deltaVFX > 0 then
+                stillDecaying = true
+                self.scores[idx].deltaVFX = es.deltaVFX - decay
+            else
+                stillDecaying = true
+                self.scores[idx].deltaVFX = es.deltaVFX + decay
+            end
+        end
+    end
+    self._dirty = stillDecaying or self._dirty
 end
 
 return EffectScoreContainer

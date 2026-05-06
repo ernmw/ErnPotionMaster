@@ -37,6 +37,11 @@ RenderBoard.__index = RenderBoard
 
 local MIN_UPDATE    = 1 / 63
 
+-- Iterate through all layers
+for i, layer in ipairs(ui.layers) do
+    print('layer', i, layer.name, layer.size)
+end
+
 ---@return RenderBoard
 function RenderBoard.new()
     local self = setmetatable({}, RenderBoard)
@@ -71,7 +76,7 @@ function RenderBoard.new()
 
     -- Board root element
     self.boardElement = ui.create({
-        --name = 'board',
+        layer = "DragAndDrop",
         type = ui.TYPE.Widget,
         props = {
             size = const.BoardSize,

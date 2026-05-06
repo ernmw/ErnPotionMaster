@@ -474,7 +474,8 @@ local function openWindow()
             --resource = ui.texture({ path = "black" }),
         },
         content = ui.content({
-            board.boardElement
+            board.boardElement,
+            gameState.effectScores:layout()
         })
     })
 end

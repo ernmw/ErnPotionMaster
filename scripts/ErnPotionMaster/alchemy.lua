@@ -194,7 +194,8 @@ end
 local function effectPinHit(original)
     original.multiplier = original.multiplier + 1
     original.score = original.score + original.multiplier
-    settings.debugPrint("effect " .. tostring(original.magicEffect.id) .. " score is now " .. tostring(original.score))
+    settings.debugPrint("effect " ..
+    tostring(original.magicEffectParams.id) .. " score is now " .. tostring(original.score))
     return original
 end
 

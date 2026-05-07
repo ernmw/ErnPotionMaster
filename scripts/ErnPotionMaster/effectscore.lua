@@ -47,7 +47,7 @@ local localization = core.l10n(MOD_NAME)
 ---@field effect table
 
 ---@class EffectScore
----@field magicEffect MagicEffectWithParams This is a openmw.core#MagicEffectWithParams
+---@field magicEffectParams MagicEffectWithParams This is a openmw.core#MagicEffectWithParams
 ---@field score number The running score for this effect. Persists across shots.
 ---@field multiplier number The multiplier for each hit this shot. Resets between shots.
 ---@field deltaVFX number A decaying-to-zero value used for special VFX.
@@ -90,26 +90,38 @@ local function barLayout(ratio, relativeLength)
     }
 end
 
+local effectIconSize = util.vector2(32, 32)
+
 ---comment
 ---@param effectScore EffectScore
 ---@return table
 local function effectScoreLayout(effectScore)
+    if not effectScore.magicEffectParams.effect then
+        error("nil effect: " .. aux_util.deepToString(effectScore.magicEffectParams, 4))
+    end
+
     return {
         type = ui.TYPE.Flex,
         props = {
             arrange = ui.ALIGNMENT.Start,
             horizontal = true,
-            autoSize = false,
-            size = util.vector2(const.EffectScorePaneSize.x, 64),
+            autoSize = true,
+            --relativeSize = util.vector2(1, 0.2),
+            --size = util.vector2(0, const.EffectScorePaneSize.y)
+            --size = util.vector2(const.EffectScorePaneSize.x, 64),
+            -- myui.padWidget(const.EffectScorePaneSize.x, 0)
+        },
+        external = {
+            grow = 1,
         },
         content = ui.content {
             {
                 type = ui.TYPE.Image,
                 props = {
                     resource = ui.texture {
-                        path = effectScore.magicEffect.effect.icon
+                        path = effectScore.magicEffectParams.effect.icon
                     },
-                    size = util.vector2(16, 16)
+                    size = effectIconSize
                 },
             },
             myui.padWidget(4, 0),
@@ -119,15 +131,16 @@ local function effectScoreLayout(effectScore)
                     arrange = ui.ALIGNMENT.Start,
                     horizontal = false,
                 },
-                external = { grow = 1 },
+                external = { scale = 1 },
                 content = ui.content {
                     {
                         template = interfaces.MWUI.templates.textHeader,
                         type = ui.TYPE.Text,
                         props = {
                             text = localization("effectScore", {
-                                effectName = effectScore.magicEffect.effect.name,
-                                score = string.format("%.1f", effectScore.score)
+                                effectName = effectScore.magicEffectParams.effect.name,
+                                --score = string.format("%.1f", effectScore.score)
+                                score = math.floor(effectScore.score)
                             }),
                             textColor = myui.interactiveTextColors.normal.default,
                             textAlignV = ui.ALIGNMENT.Center,
@@ -163,7 +176,9 @@ function EffectScoreContainer:_layout()
         props = {
             horizontal = false,
             align = ui.ALIGNMENT.Start,
-            arrange = ui.ALIGNMENT.End,
+            arrange = ui.ALIGNMENT.Start,
+            size = const.EffectScorePaneSize,
+            --autoSize = false,
         },
         content = ui.content(contents)
     }
@@ -183,25 +198,25 @@ function EffectScoreContainer.new()
 end
 
 ---comment
----@param magicEffect MagicEffectWithParams
+---@param magicEffectParams MagicEffectWithParams
 ---@param modFn fun(original:EffectScore): EffectScore? return falsey to remove it
-function EffectScoreContainer:modifyEffectScore(magicEffect, modFn)
-    if not magicEffect then
+function EffectScoreContainer:modifyEffectScore(magicEffectParams, modFn)
+    if not magicEffectParams then
         error("modifyEffectScore(): magicEffect is nil")
     end
     self._dirty = true
     local found = false
     --- find the matching effect, if any
-    for idx, effect in ipairs(self.scores) do
-        if effect.magicEffect.affectedAttribute == magicEffect.affectedAttribute and
-            effect.magicEffect.affectedSkill == magicEffect.affectedSkill and
-            effect.magicEffect.id == magicEffect.id then
-            local newScore = modFn(effect)
+    for idx, es in ipairs(self.scores) do
+        if es.magicEffectParams.affectedAttribute == magicEffectParams.affectedAttribute and
+            es.magicEffectParams.affectedSkill == magicEffectParams.affectedSkill and
+            es.magicEffectParams.id == magicEffectParams.id then
+            local newScore = modFn(es)
             if newScore then
-                settings.debugPrint("modifying effectScore " .. tostring(effect.magicEffect.id))
+                settings.debugPrint("modifying effectScore " .. tostring(es.magicEffectParams.id))
                 self.scores[idx] = newScore
             else
-                settings.debugPrint("deleting effectScore " .. tostring(effect.magicEffect.id))
+                settings.debugPrint("deleting effectScore " .. tostring(es.magicEffectParams.id))
                 table.remove(self.scores, idx)
             end
             found = true
@@ -209,7 +224,7 @@ function EffectScoreContainer:modifyEffectScore(magicEffect, modFn)
         end
     end
     if not found then
-        local newScore = modFn({ magicEffect = magicEffect, score = 0, multiplier = 0, deltaVFX = 0 })
+        local newScore = modFn({ magicEffectParams = magicEffectParams, score = 0, multiplier = 0, deltaVFX = 0 })
         if newScore then
             settings.debugPrint("adding new effectScore " .. aux_util.deepToString(newScore, 3))
             table.insert(self.scores, newScore)

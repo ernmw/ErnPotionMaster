@@ -69,34 +69,45 @@ function RenderBoard.new()
     self.balls = dynamic.NewDynamicContainer(self._ballsElement, {})
 
     -- Board root element
-    self.boardElement = ui.create({
-        name = "board",
-        type = ui.TYPE.Widget,
-        props = {
-            size = const.BoardSize,
-            visible = true,
-        },
-        content = ui.content {
-            {
-                template = interfaces.MWUI.templates.textNormal,
-                props = {
-                    text = "left top",
-                    relativePosition = util.vector2(0, 0),
-                    anchor = util.vector2(0, 0)
-                }
+    self.boardElement = ui.create(
+        {
+            type = ui.TYPE.Container,
+            template = interfaces.MWUI.templates.box,
+            props = {
+                visible = true,
             },
-            {
-                template = interfaces.MWUI.templates.textNormal,
-                props = {
-                    text = "right bottom",
-                    relativePosition = util.vector2(1, 1),
-                    anchor = util.vector2(1, 1)
+            content = ui.content {
+                {
+                    name = "board",
+                    type = ui.TYPE.Widget,
+                    props = {
+                        size = const.BoardSize,
+
+                    },
+                    content = ui.content {
+                        {
+                            template = interfaces.MWUI.templates.textNormal,
+                            props = {
+                                text = "left top",
+                                relativePosition = util.vector2(0, 0),
+                                anchor = util.vector2(0, 0)
+                            }
+                        },
+                        {
+                            template = interfaces.MWUI.templates.textNormal,
+                            props = {
+                                text = "right bottom",
+                                relativePosition = util.vector2(1, 1),
+                                anchor = util.vector2(1, 1)
+                            }
+                        },
+                        self._pinsElement,
+                        self._ballsElement
+                    }
                 }
-            },
-            self._pinsElement,
-            self._ballsElement
+            }
         }
-    })
+    )
 
     -- Timers (instance-specific)
     self._ballDT = 0

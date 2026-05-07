@@ -90,7 +90,7 @@ local function barLayout(ratio, relativeLength)
     }
 end
 
-local effectIconSize = util.vector2(32, 32)
+local effectIconSize = util.vector2(16, 16)
 
 ---comment
 ---@param effectScore EffectScore
@@ -112,7 +112,7 @@ local function effectScoreLayout(effectScore)
             -- myui.padWidget(const.EffectScorePaneSize.x, 0)
         },
         external = {
-            grow = 1,
+            scale = 1,
         },
         content = ui.content {
             {
@@ -124,32 +124,19 @@ local function effectScoreLayout(effectScore)
                     size = effectIconSize
                 },
             },
-            myui.padWidget(4, 0),
             {
-                type = ui.TYPE.Flex,
+                template = interfaces.MWUI.templates.textHeader,
+                type = ui.TYPE.Text,
                 props = {
-                    arrange = ui.ALIGNMENT.Start,
-                    horizontal = false,
+                    text = localization("effectScore", {
+                        effectName = effectScore.magicEffectParams.effect.name,
+                        --score = string.format("%.1f", effectScore.score)
+                        score = math.floor(effectScore.score)
+                    }),
+                    textColor = myui.interactiveTextColors.normal.default,
+                    textAlignV = ui.ALIGNMENT.Center,
                 },
-                external = { scale = 1 },
-                content = ui.content {
-                    {
-                        template = interfaces.MWUI.templates.textHeader,
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = localization("effectScore", {
-                                effectName = effectScore.magicEffectParams.effect.name,
-                                --score = string.format("%.1f", effectScore.score)
-                                score = math.floor(effectScore.score)
-                            }),
-                            textColor = myui.interactiveTextColors.normal.default,
-                            textAlignV = ui.ALIGNMENT.Center,
-                        },
-                    },
-                    myui.padWidget(0, 2),
-                    barLayout(effectScore.score - math.floor(effectScore.score), 1),
-                },
-            }
+            },
         },
     }
 end
@@ -204,6 +191,9 @@ function EffectScoreContainer:modifyEffectScore(magicEffectParams, modFn)
     if not magicEffectParams then
         error("modifyEffectScore(): magicEffect is nil")
     end
+    if not magicEffectParams.effect then
+        error("magicEffectParams.effect is nil: " .. aux_util.deepToString(magicEffectParams, 4))
+    end
     self._dirty = true
     local found = false
     --- find the matching effect, if any
@@ -213,6 +203,10 @@ function EffectScoreContainer:modifyEffectScore(magicEffectParams, modFn)
             es.magicEffectParams.id == magicEffectParams.id then
             local newScore = modFn(es)
             if newScore then
+                if not newScore.magicEffectParams.effect then
+                    error("newScore.magicEffectParams.effect is nil: " ..
+                    aux_util.deepToString(newScore.magicEffectParams, 4))
+                end
                 settings.debugPrint("modifying effectScore " .. tostring(es.magicEffectParams.id))
                 self.scores[idx] = newScore
             else
@@ -226,6 +220,10 @@ function EffectScoreContainer:modifyEffectScore(magicEffectParams, modFn)
     if not found then
         local newScore = modFn({ magicEffectParams = magicEffectParams, score = 0, multiplier = 0, deltaVFX = 0 })
         if newScore then
+            if not newScore.magicEffectParams.effect then
+                error("newScore.magicEffectParams.effect is nil: " ..
+                aux_util.deepToString(newScore.magicEffectParams, 4))
+            end
             settings.debugPrint("adding new effectScore " .. aux_util.deepToString(newScore, 3))
             table.insert(self.scores, newScore)
         end

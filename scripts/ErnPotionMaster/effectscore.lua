@@ -51,6 +51,7 @@ local localization = core.l10n(MOD_NAME)
 ---@field score number The running score for this effect. Persists across shots.
 ---@field multiplier number The multiplier for each hit this shot. Resets between shots.
 ---@field deltaVFX number A decaying-to-zero value used for special VFX.
+---@field active boolean True if this shot has effect pins (the active ingredient).
 
 local function barLayout(ratio, relativeLength)
     return {
@@ -205,7 +206,7 @@ function EffectScoreContainer:modifyEffectScore(magicEffectParams, modFn)
             if newScore then
                 if not newScore.magicEffectParams.effect then
                     error("newScore.magicEffectParams.effect is nil: " ..
-                    aux_util.deepToString(newScore.magicEffectParams, 4))
+                        aux_util.deepToString(newScore.magicEffectParams, 4))
                 end
                 settings.debugPrint("modifying effectScore " .. tostring(es.magicEffectParams.id))
                 self.scores[idx] = newScore
@@ -218,11 +219,11 @@ function EffectScoreContainer:modifyEffectScore(magicEffectParams, modFn)
         end
     end
     if not found then
-        local newScore = modFn({ magicEffectParams = magicEffectParams, score = 0, multiplier = 0, deltaVFX = 0 })
+        local newScore = modFn({ magicEffectParams = magicEffectParams, score = 0, multiplier = 0, deltaVFX = 0, active = false })
         if newScore then
             if not newScore.magicEffectParams.effect then
                 error("newScore.magicEffectParams.effect is nil: " ..
-                aux_util.deepToString(newScore.magicEffectParams, 4))
+                    aux_util.deepToString(newScore.magicEffectParams, 4))
             end
             settings.debugPrint("adding new effectScore " .. aux_util.deepToString(newScore, 3))
             table.insert(self.scores, newScore)

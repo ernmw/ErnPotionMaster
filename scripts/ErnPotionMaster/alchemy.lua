@@ -296,29 +296,80 @@ local function addToolPins(pins, toolStrengths)
     return pins
 end
 
+local function effectPinsToIngredientRecord(ingredientRecord)
+    local effectPinClassToMagicEffectWithParams = {}
+    for idx, effectParam in ipairs(ingredientRecord.effects) do
+        if idx == 1 then
+            effectPinClassToMagicEffectWithParams[PinClass.EFFECT_1] = effectParam
+        elseif idx == 2 then
+            effectPinClassToMagicEffectWithParams[PinClass.EFFECT_2] = effectParam
+        elseif idx == 3 then
+            effectPinClassToMagicEffectWithParams[PinClass.EFFECT_3] = effectParam
+        elseif idx == 4 then
+            effectPinClassToMagicEffectWithParams[PinClass.EFFECT_4] = effectParam
+        end
+    end
+    return effectPinClassToMagicEffectWithParams
+end
+
 local function addEffectPins(pins, pestleStrength, ingredientRecord)
     pins = pins or {}
     local pinCount = util.clamp(math.floor((pestleStrength + 1) * math.log(10, ingredientRecord.value)), 1, 5)
 
-    for idx, effectParam in ipairs(ingredientRecord.effects) do
+    for pinClass, effectParam in pairs(effectPinsToIngredientRecord(ingredientRecord)) do
         -- unintended effects only get one pin
         local effectPinCount = pinCount
         if effectParam.effect.harmful == gameState.isPotion then
             effectPinCount = 1
         end
-        if idx == 1 then
-            pins[PinClass.EFFECT_1] = effectPinCount
-        elseif idx == 2 then
-            pins[PinClass.EFFECT_2] = effectPinCount
-        elseif idx == 3 then
-            pins[PinClass.EFFECT_3] = effectPinCount
-        elseif idx == 4 then
-            pins[PinClass.EFFECT_4] = effectPinCount
-        end
+        pins[pinClass] = effectPinCount
     end
     return pins
 end
 
+local function getEffectPinLayouter(magicEffectWithParams)
+    local color = const.MagickColors[magicEffectWithParams.effect.school] or magicEffectWithParams.effect.color
+    local icon = {
+        type = ui.TYPE.Image,
+        props = {
+            relativePosition = util.vector2(0.5, 0.5),
+            anchor = util.vector2(0.5, 0.5),
+            size = const.BallSize / 2,
+            resource = ui.texture {
+                path = magicEffectWithParams.effect.icon
+            },
+        }
+    }
+    return function(dt, id)
+        if not gameState then
+            return false
+        end
+
+        local pinInfo = gameState.pins[id]
+        local pin = gameState.physics.pins[id]
+        if pin and not gameState.pins[id].popped then
+            return {
+                type = ui.TYPE.Image,
+                props = {
+                    position = pin.position,
+                    anchor = util.vector2(0.5, 0.5),
+                    size = const.BallSize,
+                    resource = templates.ballTexture,
+                    color = color
+                },
+                content = ui.content {
+                    icon
+                }
+            }
+        else
+            -- delete the pin from renderer
+            return false
+        end
+    end
+end
+
+
+-- sets the board up for a new shot
 local function resetBoard(ingredientObjects, toolStrengths)
     settings.debugPrint("resetBoard() called")
     board = renderBoard.new()
@@ -368,6 +419,8 @@ local function resetBoard(ingredientObjects, toolStrengths)
     ---@type Vector2[]
     local potentialSpots = placepins(const.BoardSize:emul(util.vector2(1, 1 - topOffset.y)), const.PinRadius, totalPins)
 
+    local pinClassesToEffectsMap = effectPinsToIngredientRecord(gameState.currentIngredientRecord)
+
     local pinID = 100
     -- assign pins to spots
     for pinType, count in pairs(pinCounts) do
@@ -378,26 +431,34 @@ local function resetBoard(ingredientObjects, toolStrengths)
             if position then
                 gameState.pins[pinID] = { class = pinType, ID = pinID, popped = false }
                 gameState.physics:addPin(pinID, position + midTopOffsetBorder, 0.9, const.PinRadius)
-                board.pins:AddRenderable({
-                    id = pinID,
-                    layout = function(dt, id)
-                        local pin = gameState.physics.pins[id]
-                        if pin and not gameState.pins[id].popped then
-                            return {
-                                type = ui.TYPE.Image,
-                                props = {
-                                    position = pin.position,
-                                    anchor = util.vector2(0.5, 0.5),
-                                    size = const.BallSize,
-                                    resource = templates.bufferPinTexture,
-                                },
-                            }
-                        else
-                            -- delete the pin from renderer
-                            return false
+                if pinClassesToEffectsMap[pinType] then
+                    local magicEffect = pinClassesToEffectsMap[pinType]
+                    board.pins:AddRenderable({
+                        id = pinID,
+                        layout = getEffectPinLayouter(magicEffect)
+                    })
+                else
+                    board.pins:AddRenderable({
+                        id = pinID,
+                        layout = function(dt, id)
+                            local pin = gameState.physics.pins[id]
+                            if pin and not gameState.pins[id].popped then
+                                return {
+                                    type = ui.TYPE.Image,
+                                    props = {
+                                        position = pin.position,
+                                        anchor = util.vector2(0.5, 0.5),
+                                        size = const.BallSize,
+                                        resource = templates.bufferPinTexture,
+                                    },
+                                }
+                            else
+                                -- delete the pin from renderer
+                                return false
+                            end
                         end
-                    end
-                })
+                    })
+                end
             end
         end
     end

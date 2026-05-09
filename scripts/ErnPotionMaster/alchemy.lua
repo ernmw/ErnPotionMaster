@@ -247,17 +247,6 @@ local function onPinHit(ballId, pinId)
     end
 end
 
-local function addToolPins(pins, toolStrengths)
-    pins = pins or {}
-    for pinType, strength in pairs(toolStrengths) do
-        if pinType ~= PinClass.MORTAR then
-            pins[pinType] = 1
-        end
-    end
-    return pins
-end
-
-
 ---comment
 ---@param a MagicEffectWithParams
 ---@param b MagicEffectWithParams
@@ -315,18 +304,7 @@ end
 ---
 --- Provided you still have the ingredients in your inventory, you can shoot another shot right after your previous potion is made.
 --- this should make it easier to do batch potion making.
-local function addEffectPins(pins, pestleStrength, ingredientRecord)
-    pins = pins or {}
-    local ingredEffects = #(ingredientRecord.effects)
-    for pinClass, effectParam in pairs(effectPinsToIngredientRecord(ingredientRecord)) do
-        -- unintended effects get fewer pins
-        if effectParam.effect.harmful == gameState.isPotion then
-            pins[pinClass] = math.ceil(8 / ingredEffects)
-        end
-        pins[pinClass] = math.ceil(32 / ingredEffects)
-    end
-    return pins
-end
+
 
 local function getEffectPinLayouter(magicEffectWithParams)
     local color = const.MagickColors[magicEffectWithParams.effect.school] or magicEffectWithParams.effect.color
@@ -451,11 +429,10 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
             for _ = 1, const.PinsPerEffect, 1 do
                 --- mortar has a chance to replace undesired effects
                 if math.random() < mortarChance then
-                    effectPinCounts[gameState.desiredMagicEffectWithParamsIdx] = effectPinCounts
-                        [gameState.desiredMagicEffectWithParamsIdx] + 1
+                    effectPinCounts[gameState.desiredMagicEffectWithParamsIdx] = (effectPinCounts
+                        [gameState.desiredMagicEffectWithParamsIdx] or 0) + 1
                 else
-                    effectPinCounts[idx] = effectPinCounts
-                        [idx] + 1
+                    effectPinCounts[idx] = (effectPinCounts[idx] or 0) + 1
                 end
             end
         end
@@ -482,54 +459,77 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
     ---@type Vector2[]
     local potentialSpots = placepins(const.BoardSize:emul(util.vector2(1, 1 - topOffset.y)), const.PinRadius, totalPins)
 
-
     --- Add pins!
+    local nextPinID = 100
 
-    local pinID = 100
-    -- assign pins to spots
-    for pinType, count in pairs(pinCounts) do
-        for i = 1, count do
-            pinID = pinID + 1
-            ---@type Vector2?
-            local position = table.remove(potentialSpots)
-            if position then
-                gameState.pins[pinID] = {
-                    class = pinType,
-                    ID = pinID,
-                    popped = false,
-                    popTimer = const.PopFadeoutSeconds,
-                    hit = false
-                }
-                gameState.physics:addPin(pinID, position + midTopOffsetBorder, 0.9, const.PinRadius)
-                if pinClassesToEffectsMap[pinType] then
-                    local magicEffect = pinClassesToEffectsMap[pinType]
-                    board.pins:AddRenderable({
-                        id = pinID,
-                        layout = getEffectPinLayouter(magicEffect)
-                    })
-                else
-                    board.pins:AddRenderable({
-                        id = pinID,
-                        layout = function(dt, id)
-                            local pin = gameState.physics.pins[id]
-                            if pin and not gameState.pins[id].popped then
-                                return {
-                                    type = ui.TYPE.Image,
-                                    props = {
-                                        position = pin.position,
-                                        anchor = util.vector2(0.5, 0.5),
-                                        size = const.BallSize,
-                                        resource = templates.bufferPinTexture,
-                                    },
-                                }
-                            else
-                                -- delete the pin from renderer
-                                return false
-                            end
-                        end
-                    })
+    ---@param pin GamePin
+    local function addPin(pin)
+        if pin.ID == 0 then
+            pin.ID = nextPinID
+            nextPinID = nextPinID + 1
+        end
+        if gameState.pins[pin.ID] then
+            error("pin ID already taken")
+        end
+        local position = table.remove(potentialSpots)
+        if not position then
+            settings.debugPrint("no space for pin " .. tostring(pin.ID))
+            return
+        end
+        gameState.pins[pin.ID] = pin
+        gameState.physics:addPin(pin.ID, position + midTopOffsetBorder, 0.9, const.PinRadius)
+        if pin.class == PinClass.EFFECT then
+            local mewp = gameState.magicEffectsWithParams[pin.magicEffectWithParamsIdx]
+            board.pins:AddRenderable({
+                id = pin.ID,
+                layout = getEffectPinLayouter(mewp)
+            })
+        else
+            board.pins:AddRenderable({
+                id = pin.ID,
+                layout = function(dt, id)
+                    local pin = gameState.physics.pins[id]
+                    if pin and not gameState.pins[id].popped then
+                        return {
+                            type = ui.TYPE.Image,
+                            props = {
+                                position = pin.position,
+                                anchor = util.vector2(0.5, 0.5),
+                                size = const.BallSize,
+                                resource = templates.bufferPinTexture,
+                            },
+                        }
+                    else
+                        -- delete the pin from renderer
+                        return false
+                    end
                 end
-            end
+            })
+        end
+    end
+
+    for idx, count in pairs(effectPinCounts) do
+        for _ = 1, count, 1 do
+            addPin({
+                ID = 0,
+                class = PinClass.EFFECT,
+                magicEffectWithParamsIdx = idx,
+                hit = false,
+                popped = false,
+                popTimer = const.PopFadeoutSeconds,
+            })
+        end
+    end
+
+    for class, count in pairs(toolPinCounts) do
+        for _ = 1, count, 1 do
+            addPin({
+                ID = 0,
+                class = class,
+                hit = false,
+                popped = false,
+                popTimer = const.PopFadeoutSeconds,
+            })
         end
     end
 end
@@ -653,7 +653,10 @@ local function onInit(data)
 
     local toolStrengths = getToolStrengths()
 
-    resetBoard(ingredients, toolStrengths)
+    local desiredEffect = getMagicEffectsFromIngredients({ types.Ingredient.record(ingredients[1]) })[1]
+    settings.debugPrint("desired effect: " .. tostring(desiredEffect.id))
+
+    resetBoard(ingredients, toolStrengths, desiredEffect)
     openWindow()
 end
 

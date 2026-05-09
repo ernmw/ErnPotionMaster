@@ -16,9 +16,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 local ui                        = require("openmw.ui")
-local util                      = require("openmw.util")
 local search                    = require("scripts.ErnPotionMaster.search")
-local const                     = require("scripts.ErnPotionMaster.const")
 
 ---@class Renderable
 ---@field id number
@@ -26,12 +24,11 @@ local const                     = require("scripts.ErnPotionMaster.const")
 
 ---@class DynamicContainer
 ---@field element table
----@field content table?
 ---@field renderables Renderable[]
----@field _layoutCache table<number, table> -- id -> layout
----@field _order number[]                  -- stable ordered ids
+---@field _layoutCache table<number, table>  -- id -> last known layout
+---@field _pendingRemove table<number, true> -- ids flagged for removal this frame
 ---@field AddRenderable fun(self: DynamicContainer, renderable: Renderable)
----@field Render fun(self: DynamicContainer, dt: number)
+---@field Render fun(self: DynamicContainer, dt: number): boolean
 ---@field Reset fun(self: DynamicContainer)
 
 ---@class DynamicContainerMethods
@@ -42,14 +39,11 @@ DynamicContainerMethods.__index = DynamicContainerMethods
 ---@param renderable Renderable
 function DynamicContainerMethods:AddRenderable(renderable)
     assert(type(renderable.id) == "number", "Renderable must have numeric id")
-    assert(type(renderable.layout) == "function", "Renderable must have layout(dt)")
-
+    assert(type(renderable.layout) == "function", "Renderable must have layout(dt, id)")
     local insertIndex = search.binarySearch(self.renderables, function(p)
         return p.id > renderable.id
     end)
-
     table.insert(self.renderables, insertIndex, renderable)
-    table.insert(self._order, insertIndex, renderable.id)
 end
 
 ---@param element table
@@ -57,25 +51,23 @@ end
 ---@return DynamicContainer
 local function NewDynamicContainer(element, renderables)
     local new = {
-        element = element,
-        renderables = {},
-        _layoutCache = {},
-        _order = {},
+        element        = element,
+        renderables    = {},
+        _layoutCache   = {},
+        _pendingRemove = {},
     }
     setmetatable(new, DynamicContainerMethods)
-
     for _, r in ipairs(renderables) do
         new:AddRenderable(r)
     end
-
     return new
 end
 
 ---@param self DynamicContainer
 function DynamicContainerMethods:Reset()
-    self.renderables = {}
-    self._layoutCache = {}
-    self._order = {}
+    self.renderables            = {}
+    self._layoutCache           = {}
+    self._pendingRemove         = {}
     self.element.layout.content = ui.content({})
     self.element:update()
 end
@@ -86,35 +78,51 @@ end
 function DynamicContainerMethods:Render(dt)
     local dirty = false
 
+    -- 1. Evaluate all renderables, collect removals.
+    --    Removals are deferred so we don't mutate `renderables` mid-iteration.
     for _, r in ipairs(self.renderables) do
         local result = r.layout(dt, r.id)
-
         if result == false then
-            -- remove
-            self._layoutCache[r.id] = nil
-            dirty = true
+            -- Flag for removal. Evict from cache NOW so it won't appear
+            -- in the content rebuild below — this is what prevents the
+            -- one-frame flash.
+            if self._layoutCache[r.id] ~= nil then
+                self._layoutCache[r.id] = nil
+                dirty = true
+            end
+            self._pendingRemove[r.id] = true
         elseif result ~= nil then
-            -- changed
             self._layoutCache[r.id] = result
             dirty = true
         end
-        -- nil = unchanged
+        -- nil → unchanged; skip
+    end
+
+    -- 2. Purge removed renderables in one pass (avoids repeated table.remove shifts).
+    if next(self._pendingRemove) then
+        local kept = {}
+        for _, r in ipairs(self.renderables) do
+            if not self._pendingRemove[r.id] then
+                kept[#kept + 1] = r
+            end
+        end
+        self.renderables    = kept
+        self._pendingRemove = {}
+        -- dirty is already true from the cache eviction above
     end
 
     if not dirty then
-        return false -- nothing changed, skip UI update entirely
+        return false
     end
 
-    -- rebuild only when something actually changed
+    -- 3. Rebuild content in sorted order (renderables is kept sorted by id).
     local newContent = {}
-
-    for _, id in ipairs(self._order) do
-        local layout = self._layoutCache[id]
+    for _, r in ipairs(self.renderables) do
+        local layout = self._layoutCache[r.id]
         if layout then
-            table.insert(newContent, layout)
+            newContent[#newContent + 1] = layout
         end
     end
-
     self.element.layout.content = ui.content(newContent)
     self.element:update()
     return true

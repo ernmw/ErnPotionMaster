@@ -55,7 +55,7 @@ local localization = core.l10n(MOD_NAME)
 
 ---comment
 ---@param value number
----@param color userdata
+---@param color Color
 ---@param length number
 ---@return table
 local function barLayout(value, color, length)
@@ -102,7 +102,7 @@ local function barLayout(value, color, length)
                     textAlignH = ui.ALIGNMENT.Center,
                     relativePosition = util.vector2(0.5, 0.5),
                     anchor = util.vector2(0.5, 0.5),
-                    textSize = 14
+                    textSize = 16
                 },
             },
         }
@@ -113,6 +113,15 @@ local effectIconSize = util.vector2(16, 16)
 
 local attributes = core.stats.Attribute.records
 local skills = core.stats.Skill.records
+
+local function lerpColor(a, b, t)
+    return util.color.rgba(
+        a.r + (b.r - a.r) * t,
+        a.g + (b.g - a.g) * t,
+        a.b + (b.b - a.b) * t,
+        a.a + (b.a - a.a) * t
+    )
+end
 
 ---comment
 ---@param effectScore EffectScore
@@ -154,7 +163,8 @@ local function effectScoreLayout(effectScore)
             {
                 type = ui.TYPE.Flex,
                 props = {
-                    arrange = ui.ALIGNMENT.Start,
+                    arrange = ui.ALIGNMENT.Center,
+                    align = ui.ALIGNMENT.Center,
                     horizontal = true,
                     autoSize = true,
                     --relativeSize = util.vector2(1, 0.2),
@@ -173,17 +183,21 @@ local function effectScoreLayout(effectScore)
                         },
                     },
                     {
-                        template = interfaces.MWUI.templates.textHeader,
+                        --template = interfaces.MWUI.templates.textHeader,
                         type = ui.TYPE.Text,
                         props = {
                             text = text,
-                            textColor = myui.interactiveTextColors.normal.default,
+                            textColor = lerpColor(myui.interactiveTextColors.normal.default, const.HitFlashColor, util.clamp(effectScore.deltaVFX, 0, 1)),
                             textAlignV = ui.ALIGNMENT.Center,
+                            textSize = 18,
+                            --anchor = util.vector2(0.5, 0),
                         },
                     },
                 },
             },
-            barLayout(effectScore.score, color, const.EffectScorePaneSize.x),
+            barLayout(effectScore.score,
+                color,
+                const.EffectScorePaneSize.x),
             myui.padWidget(10, 10),
         }
     }
@@ -219,11 +233,22 @@ function EffectScoreContainer:_layout()
     }
 end
 
+---@param mewp MagicEffectWithParams
+---@return EffectScore
+local function makeNewScore(mewp)
+    return { magicEffectParams = mewp, score = 0, multiplier = 0, deltaVFX = 0, active = false }
+end
+
+---@param initial MagicEffectWithParams[]
 ---@return EffectScoreContainer
-function EffectScoreContainer.new()
+function EffectScoreContainer.new(initial)
     local self = setmetatable({}, EffectScoreContainer)
 
     self.scores = {}
+    for _, mewp in pairs(initial or {}) do
+        table.insert(self.scores, makeNewScore(mewp))
+    end
+
     self._dirty = false
     local layout = self:_layout()
     settings.debugPrint(aux_util.deepToString(layout, 3))
@@ -245,12 +270,15 @@ function EffectScoreContainer:modifyEffectScore(magicEffectParams, modFn)
     self._dirty = true
     local found = false
     --- find the matching effect, if any
+
+    ---@param es EffectScore
     for idx, es in ipairs(self.scores) do
         if es.magicEffectParams.affectedAttribute == magicEffectParams.affectedAttribute and
             es.magicEffectParams.affectedSkill == magicEffectParams.affectedSkill and
             es.magicEffectParams.id == magicEffectParams.id then
             local newScore = modFn(es)
             if newScore then
+                newScore.deltaVFX = 1
                 if not newScore.magicEffectParams.effect then
                     error("newScore.magicEffectParams.effect is nil: " ..
                         aux_util.deepToString(newScore.magicEffectParams, 4))
@@ -266,19 +294,20 @@ function EffectScoreContainer:modifyEffectScore(magicEffectParams, modFn)
         end
     end
     if not found then
-        local newScore = modFn({ magicEffectParams = magicEffectParams, score = 0, multiplier = 0, deltaVFX = 0, active = false })
+        local newScore = modFn(makeNewScore(magicEffectParams))
         if newScore then
             if not newScore.magicEffectParams.effect then
                 error("newScore.magicEffectParams.effect is nil: " ..
                     aux_util.deepToString(newScore.magicEffectParams, 4))
             end
+            newScore.deltaVFX = 1
             settings.debugPrint("adding new effectScore " .. aux_util.deepToString(newScore, 3))
             table.insert(self.scores, newScore)
         end
     end
 end
 
-local DELTA_VFX_DECAY = 0.1
+local DELTA_VFX_DECAY = 0.5
 
 ---@param dt number
 function EffectScoreContainer:onFrame(dt)
@@ -287,7 +316,11 @@ function EffectScoreContainer:onFrame(dt)
 
     for idx, es in ipairs(self.scores) do
         if self.scores[idx] then
-            if math.abs(es.deltaVFX) <= DELTA_VFX_DECAY then
+            es.deltaVFX = util.clamp(es.deltaVFX, -1, 1)
+            if es.deltaVFX == 0 then
+                --no-op
+            elseif math.abs(es.deltaVFX) <= DELTA_VFX_DECAY then
+                stillDecaying = true
                 self.scores[idx].deltaVFX = 0
             elseif es.deltaVFX > 0 then
                 stillDecaying = true

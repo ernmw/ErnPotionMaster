@@ -389,7 +389,7 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
         isPotion = true,
         ballID = 1,
         currentState = StateClass.TARGET_SELECTION,
-        effectScores = effectScore.new(),
+        effectScores = nil,
         ingredientRecords = {},
         magicEffectsWithParams = {},
         desiredMagicEffectWithParamsIdx = 0,
@@ -416,7 +416,9 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
     if not idxOfDesired then
         error("effect not found")
     end
+    settings.debugPrint("found " .. tostring(#gameState.magicEffectsWithParams) .. " effects")
     gameState.desiredMagicEffectWithParamsIdx = idxOfDesired
+    gameState.effectScores = effectScore.new(gameState.magicEffectsWithParams)
 
     -- determine magic effect pin counts
     local playerAlchemyFactor = util.remap(util.clamp(pself.type.stats.skills.alchemy(pself).modified, 0, 130), 0, 130, 1,
@@ -649,10 +651,10 @@ local function onInit(data)
     -- TODO: actually do selection logic. this is just for testing
     local ingredients = {}
     for _, item in ipairs(shuffle(pself.type.inventory(pself):getAll(types.Ingredient))) do
-        table.insert(ingredients, item)
         if #ingredients > 2 then
             break
         end
+        table.insert(ingredients, item)
     end
 
     local toolStrengths = getToolStrengths()

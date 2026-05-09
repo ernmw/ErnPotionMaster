@@ -84,50 +84,6 @@ local resilientImage = {
     },
 }
 
-local sweepTextures = {
-    ui.texture {
-        path = "textures\\ErnPotionMaster\\circle-sweep.png",
-        offset = util.vector2(0, 0),
-        size = util.vector2(64, 64)
-    },
-    ui.texture {
-        path = "textures\\ErnPotionMaster\\circle-sweep.png",
-        offset = util.vector2(64, 0),
-        size = util.vector2(64, 64)
-    },
-    ui.texture {
-        path = "textures\\ErnPotionMaster\\circle-sweep.png",
-        offset = util.vector2(0, 64),
-        size = util.vector2(64, 64)
-    },
-    ui.texture {
-        path = "textures\\ErnPotionMaster\\circle-sweep.png",
-        offset = util.vector2(64, 64),
-        size = util.vector2(64, 64)
-    }
-}
-
-local function resilientImages()
-    local out = {}
-    for _, img in sweepTextures do
-        table.insert(out,
-            {
-                type = ui.TYPE.Image,
-                props = {
-                    anchor = util.vector2(0.5, 0.5),
-                    relativePosition = util.vector2(0.5, 0.5),
-                    size = const.BallSize,
-                    resource = img,
-                    color = util.color.hex("D4AF37"),
-                },
-            }
-        )
-    end
-    return out
-end
-
-local resilientSweepImages = resilientImages()
-
 return {
     pinWidget = pinWidget,
     ballWidget = ballWidget,
@@ -139,6 +95,5 @@ return {
     },
     shadeTexture = ui.texture {
         path = "textures\\ErnPotionMaster\\circle-ball-shade-3.png"
-    },
-    resilientSweepImages = resilientSweepImages,
+    }
 }

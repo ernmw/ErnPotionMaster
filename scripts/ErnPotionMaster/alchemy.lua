@@ -39,6 +39,7 @@ local renderBoard   = require("scripts.ErnPotionMaster.render.board")
 local templates     = require("scripts.ErnPotionMaster.render.templates")
 local effectScore   = require("scripts.ErnPotionMaster.effectscore")
 local search        = require("scripts.ErnPotionMaster.search")
+local sprite        = require("scripts.ErnPotionMaster.render.sprite")
 
 local shootPosition = util.vector2(0.5, 0.05):emul(const.BoardSize)
 
@@ -127,7 +128,6 @@ local PinClass = {
 ---@field popTimer number time that counts down post-popping for vfx.
 ---@field hit boolean used for vfx
 ---@field resilient boolean indicates that the pin will take two hits to pop. after being hit once, resilient is set to false
----@field resilientTimer number handles the resilient animation
 
 ---@class GameState
 ---@field currentState StateClass
@@ -308,6 +308,15 @@ end
 --- this should make it easier to do batch potion making.
 
 
+local resilientShine = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\circle-sweep.png",
+    util.vector2(2 * 64, 2 * 64),
+    4, 10, nil, {
+        anchor = util.vector2(0.5, 0.5),
+        relativePosition = util.vector2(0.5, 0.5),
+        size = const.BallSize,
+        color = util.color.hex("D4AF37"),
+    })
+
 local function getEffectPinLayouter(magicEffectWithParams)
     local color = const.MagickColors[magicEffectWithParams.effect.school].default or magicEffectWithParams.effect.color
     local shadeColor = const.MagickColors[magicEffectWithParams.effect.school].highlight or
@@ -354,7 +363,7 @@ local function getEffectPinLayouter(magicEffectWithParams)
                             color = hitThisFrame and const.HitFlashColor or shadeColor
                         },
                     },
-                    pinInfo.resilient and templates.resilientImage or {},
+                    pinInfo.resilient and resilientShine:GetLayout(0) or {},
                 }
             }
         elseif pin and pinInfo.popped and pinInfo.popTimer > 0 then
@@ -377,7 +386,6 @@ local function getEffectPinLayouter(magicEffectWithParams)
         end
     end
 end
-
 
 -- sets the board up for a new shot
 ---comment
@@ -594,6 +602,7 @@ local function physicsSimulation(dt)
         error("gameState is nil")
     end
     gameState.physics:advanceSimulation(dt)
+    resilientShine:GetLayout(dt) -- to advance the anim
     board:onFrame(dt)
     window:update()
 end

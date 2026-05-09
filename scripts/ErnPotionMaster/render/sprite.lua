@@ -16,6 +16,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 local ui                     = require("openmw.ui")
+local util                   = require("openmw.util")
 
 ---@class AnimatedImage
 ---@field _imageAtlasPath string must be a square image atlas of square frames, with the top left being the starting frame
@@ -48,58 +49,42 @@ local function deepCopy(orig)
     return copy
 end
 
----@param imageAtlasPath string must be a square image atlas of square frames, with the top left being the starting frame
----@param imageAtlasResolution Vector2
----@param frames number number of frames in the atlas
----@param fps number how fast to play the animation
----@param loops number? nil if loops forever. else, number of loops to do.
----@return AnimatedImage
 local function NewAnimatedImage(imageAtlasPath, imageAtlasResolution, frames, fps, loops, props)
     local new = {
-        _imageAtlasPath = imageAtlasPath,
-        _frames         = frames,
-        _fps            = fps,
-        _loops          = loops,
-        _lastFrameIdx   = 1,
-        _elapsedTime    = 0,
-        _elapsedLoops   = 0,
-        _imageLayouts   = {}
+        _imageAtlasPath       = imageAtlasPath,
+        _imageAtlasResolution = imageAtlasResolution, -- was missing!
+        _frames               = frames,
+        _fps                  = fps,
+        _loops                = loops,
+        _lastFrameIdx         = 1,
+        _elapsedTime          = 0,
+        _elapsedLoops         = 0,
+        _imageLayouts         = {}
     }
     setmetatable(new, AnimatedImageMethods)
-    --- TODO: build out image table layouts
-    --- you need to split up the atlas automatically based on frame count and atlas size
-    --- this is how you extract subimages from an atlas:
-    --[[
-    local frameTextures =
-    ---     ui.texture {
-        path = "textures\\ErnPotionMaster\\circle-sweep.png",
-        offset = util.vector2(0, 0),
-        size = util.vector2(64, 64)
-    },
-    ui.texture {
-        path = "textures\\ErnPotionMaster\\circle-sweep.png",
-        offset = util.vector2(64, 0),
-        size = util.vector2(64, 64)
-    },
-    ui.texture {
-        path = "textures\\ErnPotionMaster\\circle-sweep.png",
-        offset = util.vector2(0, 64),
-        size = util.vector2(64, 64)
-    },
-    ui.texture {
-        path = "textures\\ErnPotionMaster\\circle-sweep.png",
-        offset = util.vector2(64, 64),
-        size = util.vector2(64, 64)
-    }
-    ]] --
 
-    --- then for each image, you do this:
-    for _, img in frameTextures do
+    local cols      = math.ceil(math.sqrt(frames))
+    local rows      = math.ceil(frames / cols)
+    local frameSize = util.vector2(
+        imageAtlasResolution.x / cols,
+        imageAtlasResolution.y / rows
+    )
+
+    for i = 0, frames - 1 do
+        local col = i % cols
+        local row = math.floor(i / cols)
+
+        local tex = ui.texture {
+            path   = imageAtlasPath,
+            offset = util.vector2(col * frameSize.x, row * frameSize.y),
+            size   = frameSize
+        }
+
         local newFrame = {
-            type = ui.TYPE.Image,
+            type  = ui.TYPE.Image,
             props = deepCopy(props or {})
         }
-        newFrame.props.resource = img
+        newFrame.props.resource = tex
         table.insert(new._imageLayouts, newFrame)
     end
 
@@ -110,14 +95,29 @@ end
 ---@param dt number
 ---@return table? nil if loop expired
 function AnimatedImageMethods:GetLayout(dt)
-    --- advance elapsed time and last frame
-    self._elapsedTime = self._elapsedTime + dt
-    while self._elapsedTime > 1 / self._fps do
-        self._lastFrameIdx = self._lastFrameIdx + 1
-        self._elapsedTime = self._elapsedTime - 1 / self._fps
+    -- If we already finished all loops, stay done.
+    if self._loops ~= nil and self._elapsedLoops >= self._loops then
+        return nil
     end
-    self._lastFrameIdx = ((self._lastFrameIdx - 1) % self._frames) + 1
-    -- TODO: handle loops tracking and return nil if we are done
+
+    -- Advance elapsed time, ticking forward one frame at a time so we never
+    -- skip the loop-boundary accounting even on a very long dt.
+    self._elapsedTime = self._elapsedTime + dt
+    while self._elapsedTime >= 1 / self._fps do
+        self._elapsedTime = self._elapsedTime - 1 / self._fps
+        self._lastFrameIdx = self._lastFrameIdx + 1
+
+        -- When we step past the last frame, that is one completed loop.
+        if self._lastFrameIdx > self._frames then
+            self._lastFrameIdx = 1
+            self._elapsedLoops = self._elapsedLoops + 1
+
+            -- Finite-loop check: if we just finished the last loop, return nil.
+            if self._loops ~= nil and self._elapsedLoops >= self._loops then
+                return nil
+            end
+        end
+    end
 
     return self._imageLayouts[self._lastFrameIdx]
 end

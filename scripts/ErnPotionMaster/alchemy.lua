@@ -196,7 +196,7 @@ end
 ---@return EffectScore
 local function effectPinHit(original)
     original.multiplier = original.multiplier + 1
-    original.score = original.score + original.multiplier
+    original.score = original.score + math.sqrt(original.multiplier)
     settings.debugPrint("effect " ..
         tostring(original.magicEffectParams.id) .. " score is now " .. tostring(original.score))
     return original
@@ -316,15 +316,13 @@ end
 
 local function addEffectPins(pins, pestleStrength, ingredientRecord)
     pins = pins or {}
-    local pinCount = util.clamp(math.floor((pestleStrength + 1) * math.log(10, ingredientRecord.value)), 1, 5)
-
+    local ingredEffects = #(ingredientRecord.effects)
     for pinClass, effectParam in pairs(effectPinsToIngredientRecord(ingredientRecord)) do
         -- unintended effects only get one pin
-        local effectPinCount = pinCount
         if effectParam.effect.harmful == gameState.isPotion then
-            effectPinCount = 1
+            pins[pinClass] = 1
         end
-        pins[pinClass] = effectPinCount
+        pins[pinClass] = math.ceil(32 / ingredEffects)
     end
     return pins
 end
@@ -432,7 +430,7 @@ local function resetBoard(ingredientObjects, toolStrengths)
     end
 
     local pinCounts = {}
-    pinCounts[PinClass.BUFFER] = 5
+    --pinCounts[PinClass.BUFFER] = 5
     pinCounts = addToolPins(pinCounts, gameState.toolStrengths)
     pinCounts = addEffectPins(pinCounts, gameState.toolStrengths[PinClass.MORTAR] or 0,
         gameState.currentIngredientRecord)

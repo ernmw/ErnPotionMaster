@@ -109,9 +109,13 @@ local StateClass = {
 local PinClass = {
     EFFECT = 1,
     BUFFER = 2,
+    --- Extra life
     ALEMBIC = 3,
+    --- Reset
     RETORT = 4,
+    --- Multiball
     CALCINATOR = 5,
+    --- Replace effects with desired effect
     MORTAR = 6,
 }
 
@@ -132,8 +136,9 @@ local PinClass = {
 ---@field effectScores EffectScoreContainer
 ---@field ingredientRecords any[] all ingredients involved in this shot
 ---@field magicEffectsWithParams MagicEffectWithParams[] ingredient effects, de-duplicated and sorted
+---@field desiredMagicEffectWithParamsIdx number idx in self.magicEffectsWithParams
 ---@field physics PachinkoPhysics
----@field toolStrengths {PinClass: number}
+---@field toolStrengths {[PinClass]:number}
 
 ---@type GameState?
 local gameState
@@ -161,6 +166,7 @@ local function onStopAlchemy()
     })
 end
 
+---@return {[PinClass]:number}
 local function getToolStrengths()
     -- TODO!
     return {
@@ -391,7 +397,11 @@ end
 
 
 -- sets the board up for a new shot
-local function resetBoard(ingredientObjects, toolStrengths)
+---comment
+---@param ingredientObjects table[]
+---@param toolStrengths {[PinClass]:number}
+---@param desiredMagicEffectWithParams MagicEffectWithParams
+local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWithParams)
     settings.debugPrint("resetBoard() called")
     board = renderBoard.new()
     settings.debugPrint("finished importing render board")
@@ -404,12 +414,12 @@ local function resetBoard(ingredientObjects, toolStrengths)
         effectScores = effectScore.new(),
         ingredientRecords = {},
         magicEffectsWithParams = {},
+        desiredMagicEffectWithParamsIdx = 0,
         -- add a little extra height so the ball can drop below
         -- TODO: also add height above
         physics = physics.new(const.BoardSize + util.vector2(0, 1.5 * const.BallSize.y)),
         pins = {},
         toolStrengths = toolStrengths,
-        currentIngredientRecord = nil,
     }
     gameState.physics.onEdgeHit = onEdgeHit
     gameState.physics.onPinHit = onPinHit
@@ -420,16 +430,50 @@ local function resetBoard(ingredientObjects, toolStrengths)
         table.insert(gameState.ingredientRecords, record)
     end
 
+    --- get magic effects we are dealing with
     gameState.magicEffectsWithParams = getMagicEffectsFromIngredients(gameState.ingredientRecords)
+    local idxOfDesired = search.contains(gameState.magicEffectsWithParams, function(item)
+        return magicEffectsEqual(desiredMagicEffectWithParams, item)
+    end)
+    if not idxOfDesired then
+        error("effect not found")
+    end
+    gameState.desiredMagicEffectWithParamsIdx = idxOfDesired
 
-    local pinCounts = {}
-    --pinCounts[PinClass.BUFFER] = 5
-    pinCounts = addToolPins(pinCounts, gameState.toolStrengths)
-    pinCounts = addEffectPins(pinCounts, gameState.toolStrengths[PinClass.MORTAR] or 0,
-        gameState.currentIngredientRecord)
+    -- determine magic effect pin counts
+    local mortarChance = util.remap(util.clamp(toolStrengths[PinClass.MORTAR], 0, 2), 0, 2, 0, 0.5)
+    ---@type {[number]:number}
+    local effectPinCounts = {}
+    for idx, mewp in ipairs(gameState.magicEffectsWithParams) do
+        if idx == gameState.desiredMagicEffectWithParamsIdx then
+            effectPinCounts[idx] = const.PinsPerEffect
+        else
+            for _ = 1, const.PinsPerEffect, 1 do
+                --- mortar has a chance to replace undesired effects
+                if math.random() < mortarChance then
+                    effectPinCounts[gameState.desiredMagicEffectWithParamsIdx] = effectPinCounts
+                        [gameState.desiredMagicEffectWithParamsIdx] + 1
+                else
+                    effectPinCounts[idx] = effectPinCounts
+                        [idx] + 1
+                end
+            end
+        end
+    end
 
+    ---@type {[PinClass]:number}
+    local toolPinCounts = {
+        [PinClass.ALEMBIC] = math.ceil(2 * gameState.toolStrengths[PinClass.ALEMBIC]),
+        [PinClass.CALCINATOR] = math.ceil(2 * gameState.toolStrengths[PinClass.CALCINATOR]),
+        [PinClass.RETORT] = gameState.toolStrengths[PinClass.RETORT] and 1 or 0
+    }
+
+    -- get total number of pins
     local totalPins = 0
-    for _, count in pairs(pinCounts) do
+    for _, count in pairs(effectPinCounts) do
+        totalPins = totalPins + count
+    end
+    for _, count in pairs(toolPinCounts) do
         totalPins = totalPins + count
     end
 
@@ -437,6 +481,9 @@ local function resetBoard(ingredientObjects, toolStrengths)
     local midTopOffsetBorder = const.BoardSize:emul(util.vector2(0, topOffset.y))
     ---@type Vector2[]
     local potentialSpots = placepins(const.BoardSize:emul(util.vector2(1, 1 - topOffset.y)), const.PinRadius, totalPins)
+
+
+    --- Add pins!
 
     local pinID = 100
     -- assign pins to spots

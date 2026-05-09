@@ -37,5 +37,6 @@ return {
     EffectScorePaneSize = util.vector2(128, 768),
     MagickColors = magickColors,
     PopFadeoutSeconds = 2,
-    HitFlashColor = util.color.hex("FFFFFF")
+    HitFlashColor = util.color.hex("FFFFFF"),
+    PinsPerEffect = 4,
 }

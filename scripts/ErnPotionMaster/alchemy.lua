@@ -81,7 +81,7 @@ Pins have a chance to Pop when they are hit based on your Alchemy skill, Intelli
 ---Returns the chance that a Pin will Pop when it is hit.
 ---If it pops, it gets deleted. The pin hit effect still takes place, though.
 ---@return number between 0.1 and 1
-local function popChance()
+local function resilientChance()
     local playerAlchemy = util.remap(util.clamp(pself.type.stats.skills.alchemy(pself).modified, 0, 130), 0, 130, 0, 0.7)
     local playerLuck = util.remap(util.clamp(pself.type.stats.attributes.luck(pself).modified, 0, 130), 0, 130, 0, 0.1)
     local playerIntelligence = util.remap(util.clamp(pself.type.stats.attributes.intelligence(pself).modified, 0, 130), 0,
@@ -125,8 +125,9 @@ local PinClass = {
 ---@field ID number
 ---@field popped boolean
 ---@field popTimer number time that counts down post-popping for vfx.
----@field hit boolean
-
+---@field hit boolean used for vfx
+---@field resilient boolean indicates that the pin will take two hits to pop. after being hit once, resilient is set to false
+---@field resilientTimer number handles the resilient animation
 
 ---@class GameState
 ---@field currentState StateClass
@@ -239,11 +240,12 @@ local function onPinHit(ballId, pinId)
     end
 
     gameState.pins[pinId].hit = true
-    if math.random() < popChance() then
+    if gameState.pins[pinId].resilient then
+        gameState.pins[pinId].resilient = false
+    else
         settings.debugPrint("pin " .. tostring(pinId) .. " popped")
         gameState.pins[pinId].popped = true
         gameState.physics.pins[pinId].enabled = false
-        -- todo: render a little popping sprite
     end
 end
 
@@ -309,7 +311,7 @@ end
 local function getEffectPinLayouter(magicEffectWithParams)
     local color = const.MagickColors[magicEffectWithParams.effect.school].default or magicEffectWithParams.effect.color
     local shadeColor = const.MagickColors[magicEffectWithParams.effect.school].highlight or
-    magicEffectWithParams.effect.color
+        magicEffectWithParams.effect.color
     local icon = {
         type = ui.TYPE.Image,
         props = {
@@ -351,7 +353,8 @@ local function getEffectPinLayouter(magicEffectWithParams)
                             resource = templates.shadeTexture,
                             color = hitThisFrame and const.HitFlashColor or shadeColor
                         },
-                    }
+                    },
+                    pinInfo.resilient and templates.resilientImage or {},
                 }
             }
         elseif pin and pinInfo.popped and pinInfo.popTimer > 0 then
@@ -516,6 +519,7 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
         end
     end
 
+    local resChance = resilientChance()
     for idx, count in pairs(effectPinCounts) do
         for _ = 1, count, 1 do
             addPin({
@@ -525,6 +529,7 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
                 hit = false,
                 popped = false,
                 popTimer = const.PopFadeoutSeconds,
+                resilient = math.random() < resChance
             })
         end
     end
@@ -537,6 +542,7 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
                 hit = false,
                 popped = false,
                 popTimer = const.PopFadeoutSeconds,
+                resilient = math.random() < resChance
             })
         end
     end

@@ -34,7 +34,7 @@ return {
     PinRadius = 15,
     BallSize = util.vector2(32, 32),
     BallRadius = 15,
-    EffectScorePaneSize = util.vector2(128, 768),
+    EffectScorePaneSize = util.vector2(256, 768),
     MagickColors = magickColors,
     PopFadeoutSeconds = 2,
     HitFlashColor = util.color.hex("FFFFFF"),

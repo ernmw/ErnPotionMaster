@@ -199,8 +199,8 @@ end
 ---@param original EffectScore
 ---@return EffectScore
 local function effectPinHit(original)
-    original.multiplier = original.multiplier + 1
-    original.score = original.score + math.sqrt(original.multiplier)
+    original.multiplier = original.multiplier + 0.05
+    original.score = original.score + 0.3 + original.multiplier
     settings.debugPrint("effect " ..
         tostring(original.magicEffectParams.id) .. " score is now " .. tostring(original.score))
     return original

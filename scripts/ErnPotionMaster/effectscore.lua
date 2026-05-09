@@ -53,14 +53,18 @@ local localization = core.l10n(MOD_NAME)
 ---@field deltaVFX number A decaying-to-zero value used for special VFX.
 ---@field active boolean True if this shot has effect pins (the active ingredient).
 
-local function barLayout(ratio, color, relativeLength)
+---comment
+---@param value number
+---@param color userdata
+---@param length number
+---@return table
+local function barLayout(value, color, length)
     return {
         type = ui.TYPE.Widget,
         name = 'bar',
         template = interfaces.MWUI.templates.borders,
         props = {
-            relativeSize = util.vector2(relativeLength or 1, 0),
-            size = util.vector2(0, 32)
+            size = util.vector2(length, 24)
         },
         content = ui.content {
             {
@@ -70,8 +74,8 @@ local function barLayout(ratio, color, relativeLength)
                     resource = ui.texture { path = 'white' },
                     relativePosition = util.vector2(0, 0),
                     relativeSize = util.vector2(1, 1),
-                    alpha = 0.7,
-                    color = util.color.rgb(0.1, 0.1, 0.1),
+                    alpha = 0.5,
+                    color = value < 1 and util.color.rgb(0.1, 0.1, 0.1) or color,
                 },
                 events = {},
             },
@@ -82,9 +86,23 @@ local function barLayout(ratio, color, relativeLength)
                     resource = ui.texture { path = 'Textures/ErnPotionMaster/horz_gradient.dds' },
                     anchor = util.vector2(0, 0),
                     --relativePosition = util.vector2(0, 1),
-                    relativeSize = util.vector2(ratio, 1),
-                    alpha = 0.7,
+                    relativeSize = util.vector2(value - math.floor(value), 1),
+                    --alpha = 0.5,
                     color = color,
+                },
+            },
+            {
+                --template = interfaces.MWUI.templates.textHeader,
+                type = ui.TYPE.Text,
+                props = {
+                    text = (value > 1000) and string.format("%e", value) or tostring(math.floor(value)),
+                    textColor = const.HitFlashColor,
+                    textShadow = true,
+                    textAlignV = ui.ALIGNMENT.Center,
+                    textAlignH = ui.ALIGNMENT.Center,
+                    relativePosition = util.vector2(0.5, 0.5),
+                    anchor = util.vector2(0.5, 0.5),
+                    textSize = 14
                 },
             },
         }
@@ -104,7 +122,8 @@ local function effectScoreLayout(effectScore)
         error("nil effect: " .. aux_util.deepToString(effectScore.magicEffectParams, 4))
     end
 
-
+    local color = const.MagickColors[effectScore.magicEffectParams.effect.school] or
+        effectScore.magicEffectParams.effect.color
 
     local text
     if effectScore.magicEffectParams.affectedAttribute then
@@ -163,7 +182,9 @@ local function effectScoreLayout(effectScore)
                         },
                     },
                 },
-            }
+            },
+            barLayout(effectScore.score, color, const.EffectScorePaneSize.x),
+            myui.padWidget(10, 10),
         }
     }
 end

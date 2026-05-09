@@ -53,14 +53,14 @@ local localization = core.l10n(MOD_NAME)
 ---@field deltaVFX number A decaying-to-zero value used for special VFX.
 ---@field active boolean True if this shot has effect pins (the active ingredient).
 
-local function barLayout(ratio, relativeLength)
+local function barLayout(ratio, color, relativeLength)
     return {
         type = ui.TYPE.Widget,
         name = 'bar',
         template = interfaces.MWUI.templates.borders,
         props = {
             relativeSize = util.vector2(relativeLength or 1, 0),
-            size = util.vector2(0, 8)
+            size = util.vector2(0, 32)
         },
         content = ui.content {
             {
@@ -84,7 +84,7 @@ local function barLayout(ratio, relativeLength)
                     --relativePosition = util.vector2(0, 1),
                     relativeSize = util.vector2(ratio, 1),
                     alpha = 0.7,
-                    color = myui.textColors.magic_fill,
+                    color = color,
                 },
             },
         }
@@ -92,6 +92,9 @@ local function barLayout(ratio, relativeLength)
 end
 
 local effectIconSize = util.vector2(16, 16)
+
+local attributes = core.stats.Attribute.records
+local skills = core.stats.Skill.records
 
 ---comment
 ---@param effectScore EffectScore
@@ -101,44 +104,67 @@ local function effectScoreLayout(effectScore)
         error("nil effect: " .. aux_util.deepToString(effectScore.magicEffectParams, 4))
     end
 
+
+
+    local text
+    if effectScore.magicEffectParams.affectedAttribute then
+        text = localization("effectWithParam", {
+            effectName = effectScore.magicEffectParams.effect.name,
+            effectParam = attributes[effectScore.magicEffectParams.affectedAttribute].name
+        })
+    elseif effectScore.magicEffectParams.affectedSkill then
+        text = localization("effectWithParam", {
+            effectName = effectScore.magicEffectParams.effect.name,
+            effectParam = skills[effectScore.magicEffectParams.affectedSkill].name
+        })
+    else
+        text = effectScore.magicEffectParams.effect.name
+    end
+
     return {
         type = ui.TYPE.Flex,
         props = {
             arrange = ui.ALIGNMENT.Start,
-            horizontal = true,
+            horizontal = false,
             autoSize = true,
-            --relativeSize = util.vector2(1, 0.2),
-            --size = util.vector2(0, const.EffectScorePaneSize.y)
-            --size = util.vector2(const.EffectScorePaneSize.x, 64),
-            -- myui.padWidget(const.EffectScorePaneSize.x, 0)
         },
         external = {
             scale = 1,
         },
         content = ui.content {
             {
-                type = ui.TYPE.Image,
+                type = ui.TYPE.Flex,
                 props = {
-                    resource = ui.texture {
-                        path = effectScore.magicEffectParams.effect.icon
+                    arrange = ui.ALIGNMENT.Start,
+                    horizontal = true,
+                    autoSize = true,
+                    --relativeSize = util.vector2(1, 0.2),
+                    --size = util.vector2(0, const.EffectScorePaneSize.y)
+                    --size = util.vector2(const.EffectScorePaneSize.x, 64),
+                    -- myui.padWidget(const.EffectScorePaneSize.x, 0)
+                },
+                content = ui.content {
+                    {
+                        type = ui.TYPE.Image,
+                        props = {
+                            resource = ui.texture {
+                                path = effectScore.magicEffectParams.effect.icon
+                            },
+                            size = effectIconSize
+                        },
                     },
-                    size = effectIconSize
+                    {
+                        template = interfaces.MWUI.templates.textHeader,
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = text,
+                            textColor = myui.interactiveTextColors.normal.default,
+                            textAlignV = ui.ALIGNMENT.Center,
+                        },
+                    },
                 },
-            },
-            {
-                template = interfaces.MWUI.templates.textHeader,
-                type = ui.TYPE.Text,
-                props = {
-                    text = localization("effectScore", {
-                        effectName = effectScore.magicEffectParams.effect.name,
-                        --score = string.format("%.1f", effectScore.score)
-                        score = math.floor(effectScore.score)
-                    }),
-                    textColor = myui.interactiveTextColors.normal.default,
-                    textAlignV = ui.ALIGNMENT.Center,
-                },
-            },
-        },
+            }
+        }
     }
 end
 

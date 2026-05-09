@@ -419,7 +419,11 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
     gameState.desiredMagicEffectWithParamsIdx = idxOfDesired
 
     -- determine magic effect pin counts
-    local mortarChance = util.remap(util.clamp(toolStrengths[PinClass.MORTAR], 0, 2), 0, 2, 0, 0.5)
+    local playerAlchemyFactor = util.remap(util.clamp(pself.type.stats.skills.alchemy(pself).modified, 0, 130), 0, 130, 1,
+        1.5)
+    -- tool strength is from 0.5 to 2
+    local replaceChance = util.remap(util.clamp(playerAlchemyFactor * toolStrengths[PinClass.MORTAR], 0.5, 3), 0.5, 3, 0,
+        0.8)
     ---@type {[number]:number}
     local effectPinCounts = {}
     for idx, mewp in ipairs(gameState.magicEffectsWithParams) do
@@ -428,7 +432,7 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
         else
             for _ = 1, const.PinsPerEffect, 1 do
                 --- mortar has a chance to replace undesired effects
-                if math.random() < mortarChance then
+                if math.random() < replaceChance then
                     effectPinCounts[gameState.desiredMagicEffectWithParamsIdx] = (effectPinCounts
                         [gameState.desiredMagicEffectWithParamsIdx] or 0) + 1
                 else
@@ -488,12 +492,12 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
             board.pins:AddRenderable({
                 id = pin.ID,
                 layout = function(dt, id)
-                    local pin = gameState.physics.pins[id]
-                    if pin and not gameState.pins[id].popped then
+                    local ppin = gameState.physics.pins[id]
+                    if ppin and not gameState.pins[id].popped then
                         return {
                             type = ui.TYPE.Image,
                             props = {
-                                position = pin.position,
+                                position = ppin.position,
                                 anchor = util.vector2(0.5, 0.5),
                                 size = const.BallSize,
                                 resource = templates.bufferPinTexture,
@@ -653,7 +657,8 @@ local function onInit(data)
 
     local toolStrengths = getToolStrengths()
 
-    local desiredEffect = getMagicEffectsFromIngredients({ types.Ingredient.record(ingredients[1]) })[1]
+    local desiredEffect = getMagicEffectsFromIngredients({ types.Ingredient.record(ingredients[1]), types.Ingredient
+        .record(ingredients[2]) })[1]
     settings.debugPrint("desired effect: " .. tostring(desiredEffect.id))
 
     resetBoard(ingredients, toolStrengths, desiredEffect)

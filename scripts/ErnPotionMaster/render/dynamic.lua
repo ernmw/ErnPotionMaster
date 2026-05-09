@@ -44,7 +44,7 @@ function DynamicContainerMethods:AddRenderable(renderable)
     assert(type(renderable.id) == "number", "Renderable must have numeric id")
     assert(type(renderable.layout) == "function", "Renderable must have layout(dt)")
 
-    local insertIndex = search(self.renderables, function(p)
+    local insertIndex = search.binarySearch(self.renderables, function(p)
         return p.id > renderable.id
     end)
 

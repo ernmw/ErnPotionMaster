@@ -31,7 +31,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ---@return integer index
 --- The lowest index i such that predicate(arr[i]) is true.
 --- Returns #arr+1 if the predicate is false for all elements.
-local function binarySearchFirst(arr, predicate)
+local function binarySearch(arr, predicate)
     local lo = 1
     local hi = #arr
     local result = #arr + 1
@@ -61,4 +61,21 @@ local function binarySearchFirst(arr, predicate)
     return result
 end
 
-return binarySearchFirst
+
+--- @generic T
+---@param arr T[]
+---@param predicate fun(item: T): boolean
+---@return number? nil if not found
+local function contains(arr, predicate)
+    for i, value in ipairs(arr) do
+        if predicate(value) then
+            return i
+        end
+    end
+    return nil
+end
+
+return {
+    binarySearch = binarySearch,
+    contains = contains
+}

@@ -38,6 +38,7 @@ local aux_util      = require('openmw_aux.util')
 local renderBoard   = require("scripts.ErnPotionMaster.render.board")
 local templates     = require("scripts.ErnPotionMaster.render.templates")
 local effectScore   = require("scripts.ErnPotionMaster.effectscore")
+local search        = require("scripts.ErnPotionMaster.search")
 
 local shootPosition = util.vector2(0.5, 0.05):emul(const.BoardSize)
 
@@ -106,20 +107,17 @@ local StateClass = {
 
 ---@enum PinClass
 local PinClass = {
-    EFFECT_1 = 1,
-    EFFECT_2 = 2,
-    EFFECT_3 = 3,
-    EFFECT_4 = 4,
-    BUFFER = 5,
-    ALEMBIC = 6,
-    RETORT = 7,
-    CALCINATOR = 8,
-    -- special
-    MORTAR = 9,
+    EFFECT = 1,
+    BUFFER = 2,
+    ALEMBIC = 3,
+    RETORT = 4,
+    CALCINATOR = 5,
+    MORTAR = 6,
 }
 
 ---@class GamePin
 ---@field class PinClass
+---@field magicEffectWithParamsIdx number? only valid with EFFECT pin class. index in gameState.magicEffectsWithParams
 ---@field ID number
 ---@field popped boolean
 ---@field popTimer number time that counts down post-popping for vfx.
@@ -132,8 +130,8 @@ local PinClass = {
 ---@field ballID number
 ---@field pins {number: GamePin}
 ---@field effectScores EffectScoreContainer
----@field pendingIngredientRecords any[] subsequent balls that haven't been shot yet
----@field currentIngredientRecord any? the ingredient matching the current ball
+---@field ingredientRecords any[] all ingredients involved in this shot
+---@field magicEffectsWithParams MagicEffectWithParams[] ingredient effects, de-duplicated and sorted
 ---@field physics PachinkoPhysics
 ---@field toolStrengths {PinClass: number}
 
@@ -217,66 +215,21 @@ local function onPinHit(ballId, pinId)
         return
     end
 
-    if gameState.pins[pinId].class == PinClass.EFFECT_1 then
-        local effect = gameState.currentIngredientRecord.effects[1]
+    if gameState.pins[pinId].class == PinClass.EFFECT then
+        local effect = gameState.magicEffectsWithParams[gameState.pins[pinId].magicEffectWithParamsIdx]
         if not effect then
-            error("onPinHit(): invalid effect 1")
-            return
-        end
-        gameState.effectScores:modifyEffectScore(effect, effectPinHit)
-    elseif gameState.pins[pinId].class == PinClass.EFFECT_2 then
-        local effect = gameState.currentIngredientRecord.effects[2]
-        if not effect then
-            error("onPinHit(): invalid effect 2")
-            return
-        end
-        gameState.effectScores:modifyEffectScore(effect, effectPinHit)
-    elseif gameState.pins[pinId].class == PinClass.EFFECT_3 then
-        local effect = gameState.currentIngredientRecord.effects[3]
-        if not effect then
-            error("onPinHit(): invalid effect 3")
-            return
-        end
-        gameState.effectScores:modifyEffectScore(effect, effectPinHit)
-    elseif gameState.pins[pinId].class == PinClass.EFFECT_4 then
-        local effect = gameState.currentIngredientRecord.effects[4]
-        if not effect then
-            error("onPinHit(): invalid effect 4")
+            error("onPinHit(): invalid effect " .. tostring(gameState.pins[pinId].magicEffectWithParamsIdx))
             return
         end
         gameState.effectScores:modifyEffectScore(effect, effectPinHit)
     elseif gameState.pins[pinId].class == PinClass.ALEMBIC then
-        -- reduce unintentional
-        for i, es in ipairs(shuffle(gameState.effectScores.scores)) do
-            if not es.magicEffectParams then
-                error("no magicEffect in effectScore: " .. aux_util.deepToString(es, 3))
-            end
-            if es.magicEffectParams.effect.harmful == gameState.isPotion then
-                gameState.effectScores:modifyEffectScore(es.magicEffectParams, function(original)
-                    local strength = gameState.toolStrengths[PinClass.ALEMBIC]
-                    original.score = original.score / (strength + 1)
-                    return original
-                end)
-                break
-            end
-        end
+        settings.debugPrint("TODO: Alembic effect")
     elseif gameState.pins[pinId].class == PinClass.RETORT then
-        -- increase intentional
-        for i, es in ipairs(shuffle(gameState.effectScores.scores)) do
-            if not es.magicEffectParams then
-                error("no magicEffect in effectScore: " .. aux_util.deepToString(es, 3))
-            end
-            if es.magicEffectParams.effect.harmful ~= gameState.isPotion then
-                gameState.effectScores:modifyEffectScore(es.magicEffectParams, function(original)
-                    local strength = gameState.toolStrengths[PinClass.RETORT]
-                    original.score = original.score * (strength + 1)
-                    return original
-                end)
-                break
-            end
-        end
+        settings.debugPrint("TODO: Retort effect")
     elseif gameState.pins[pinId].class == PinClass.CALCINATOR then
         settings.debugPrint("TODO: Calcinator effect")
+    elseif gameState.pins[pinId].class == PinClass.MORTAR then
+        settings.debugPrint("TODO: Mortar effect")
     end
 
     gameState.pins[pinId].hit = true
@@ -298,20 +251,48 @@ local function addToolPins(pins, toolStrengths)
     return pins
 end
 
-local function effectPinsToIngredientRecord(ingredientRecord)
-    local effectPinClassToMagicEffectWithParams = {}
-    for idx, effectParam in ipairs(ingredientRecord.effects) do
-        if idx == 1 then
-            effectPinClassToMagicEffectWithParams[PinClass.EFFECT_1] = effectParam
-        elseif idx == 2 then
-            effectPinClassToMagicEffectWithParams[PinClass.EFFECT_2] = effectParam
-        elseif idx == 3 then
-            effectPinClassToMagicEffectWithParams[PinClass.EFFECT_3] = effectParam
-        elseif idx == 4 then
-            effectPinClassToMagicEffectWithParams[PinClass.EFFECT_4] = effectParam
+
+---comment
+---@param a MagicEffectWithParams
+---@param b MagicEffectWithParams
+---@return boolean
+local function magicEffectsEqual(a, b)
+    return a.affectedAttribute == b.affectedAttribute and
+        a.affectedSkill == b.affectedSkill and
+        a.id == b.id
+end
+
+---@param a MagicEffectWithParams
+---@param b MagicEffectWithParams
+---@return boolean
+local function magicEffectSortFn(a, b)
+    if a.id ~= b.id then
+        return a.id < b.id
+    end
+    if a.affectedAttribute ~= b.affectedAttribute then
+        return a.affectedAttribute < b.affectedAttribute
+    end
+    if a.affectedSkill ~= b.affectedSkill then
+        return a.affectedSkill < b.affectedSkill
+    end
+    return false
+end
+
+---@param ingredientRecords table[]
+---@return MagicEffectWithParams[]
+local function getMagicEffectsFromIngredients(ingredientRecords)
+    local outEffects = {}
+    for _, ingred in ipairs(ingredientRecords) do
+        for idx, effectParam in ipairs(ingred.effects) do
+            if not search.contains(outEffects,
+                    function(a) return magicEffectsEqual(a, effectParam) end) then
+                table.insert(outEffects, effectParam)
+            end
         end
     end
-    return effectPinClassToMagicEffectWithParams
+
+    table.sort(outEffects, magicEffectSortFn)
+    return outEffects
 end
 
 --- TODO: just do one shot per potion. add pins for all ingreds' effects.
@@ -325,6 +306,9 @@ end
 --- instead of popChance on each pin, determine if the pin is Resilient or Normal when it is placed,
 --- based on the current popChance. Resilient pins can be hit once, and then become Normal.
 --- Normal pins can be hit once, and then are popped. Resilient pins will look a little different. Maybe hexagons.
+---
+--- Provided you still have the ingredients in your inventory, you can shoot another shot right after your previous potion is made.
+--- this should make it easier to do batch potion making.
 local function addEffectPins(pins, pestleStrength, ingredientRecord)
     pins = pins or {}
     local ingredEffects = #(ingredientRecord.effects)
@@ -418,8 +402,10 @@ local function resetBoard(ingredientObjects, toolStrengths)
         ballID = 1,
         currentState = StateClass.TARGET_SELECTION,
         effectScores = effectScore.new(),
-        pendingIngredientRecords = {},
+        ingredientRecords = {},
+        magicEffectsWithParams = {},
         -- add a little extra height so the ball can drop below
+        -- TODO: also add height above
         physics = physics.new(const.BoardSize + util.vector2(0, 1.5 * const.BallSize.y)),
         pins = {},
         toolStrengths = toolStrengths,
@@ -431,14 +417,10 @@ local function resetBoard(ingredientObjects, toolStrengths)
     for _, obj in ipairs(ingredientObjects) do
         local record = types.Ingredient.record(obj)
         settings.debugPrint("ingredient: " .. tostring(record.name))
-        table.insert(gameState.pendingIngredientRecords, record)
-        -- obj:remove(1) -- TODO: this doesn't work for some reason
+        table.insert(gameState.ingredientRecords, record)
     end
 
-    gameState.currentIngredientRecord = table.remove(gameState.pendingIngredientRecords, 1)
-    if not gameState.currentIngredientRecord then
-        error("gameState.currentIngredientRecord is nil")
-    end
+    gameState.magicEffectsWithParams = getMagicEffectsFromIngredients(gameState.ingredientRecords)
 
     local pinCounts = {}
     --pinCounts[PinClass.BUFFER] = 5
@@ -455,8 +437,6 @@ local function resetBoard(ingredientObjects, toolStrengths)
     local midTopOffsetBorder = const.BoardSize:emul(util.vector2(0, topOffset.y))
     ---@type Vector2[]
     local potentialSpots = placepins(const.BoardSize:emul(util.vector2(1, 1 - topOffset.y)), const.PinRadius, totalPins)
-
-    local pinClassesToEffectsMap = effectPinsToIngredientRecord(gameState.currentIngredientRecord)
 
     local pinID = 100
     -- assign pins to spots

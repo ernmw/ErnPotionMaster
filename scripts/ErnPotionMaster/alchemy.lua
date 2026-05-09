@@ -307,7 +307,9 @@ end
 
 
 local function getEffectPinLayouter(magicEffectWithParams)
-    local color = const.MagickColors[magicEffectWithParams.effect.school] or magicEffectWithParams.effect.color
+    local color = const.MagickColors[magicEffectWithParams.effect.school].default or magicEffectWithParams.effect.color
+    local shadeColor = const.MagickColors[magicEffectWithParams.effect.school].highlight or
+    magicEffectWithParams.effect.color
     local icon = {
         type = ui.TYPE.Image,
         props = {
@@ -347,7 +349,7 @@ local function getEffectPinLayouter(magicEffectWithParams)
                             relativePosition = util.vector2(0.5, 0.5),
                             size = const.BallSize,
                             resource = templates.shadeTexture,
-                            color = hitThisFrame and const.HitFlashColor or color
+                            color = hitThisFrame and const.HitFlashColor or shadeColor
                         },
                     }
                 }

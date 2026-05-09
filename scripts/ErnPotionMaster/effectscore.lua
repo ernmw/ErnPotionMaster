@@ -36,6 +36,7 @@ local interfaces   = require('openmw.interfaces')
 local shuffle      = require("scripts.ErnPotionMaster.shuffle")
 local aux_util     = require('openmw_aux.util')
 local renderBoard  = require("scripts.ErnPotionMaster.render.board")
+local colorutil    = require("scripts.ErnPotionMaster.colorutil")
 local myui         = require("scripts.ErnPotionMaster.pcp.myui")
 local templates    = require("scripts.ErnPotionMaster.render.templates")
 local localization = core.l10n(MOD_NAME)
@@ -114,14 +115,7 @@ local effectIconSize = util.vector2(16, 16)
 local attributes = core.stats.Attribute.records
 local skills = core.stats.Skill.records
 
-local function lerpColor(a, b, t)
-    return util.color.rgba(
-        a.r + (b.r - a.r) * t,
-        a.g + (b.g - a.g) * t,
-        a.b + (b.b - a.b) * t,
-        a.a + (b.a - a.a) * t
-    )
-end
+
 
 ---comment
 ---@param effectScore EffectScore
@@ -131,7 +125,7 @@ local function effectScoreLayout(effectScore)
         error("nil effect: " .. aux_util.deepToString(effectScore.magicEffectParams, 4))
     end
 
-    local color = const.MagickColors[effectScore.magicEffectParams.effect.school] or
+    local color = const.MagickColors[effectScore.magicEffectParams.effect.school].default or
         effectScore.magicEffectParams.effect.color
 
     local text
@@ -187,7 +181,7 @@ local function effectScoreLayout(effectScore)
                         type = ui.TYPE.Text,
                         props = {
                             text = text,
-                            textColor = lerpColor(myui.interactiveTextColors.normal.default, const.HitFlashColor, util.clamp(effectScore.deltaVFX, 0, 1)),
+                            textColor = colorutil.lerpColor(myui.interactiveTextColors.normal.default, const.HitFlashColor, util.clamp(effectScore.deltaVFX, 0, 1)),
                             textAlignV = ui.ALIGNMENT.Center,
                             textSize = 18,
                             --anchor = util.vector2(0.5, 0),

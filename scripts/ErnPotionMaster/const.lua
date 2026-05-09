@@ -15,10 +15,11 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
-local util = require("openmw.util")
-local core = require("openmw.core")
+local util                = require("openmw.util")
+local core                = require("openmw.core")
+local colorutil           = require("scripts.ErnPotionMaster.colorutil")
 
-local magickColors = {
+local magickColorsDefault = {
     alteration = util.color.hex("9A4CB3"),
     destruction = util.color.hex("C64F46"),
     mysticism = util.color.hex("836986"),
@@ -27,6 +28,13 @@ local magickColors = {
     illusion = util.color.hex("658665"),
 }
 
+local magickColors        = {}
+for id, defaultColor in pairs(magickColorsDefault) do
+    magickColors[id] = {
+        default = defaultColor,
+        highlight = colorutil.lerpColor(defaultColor, util.color.hex("FFFFFF"), 0.5)
+    }
+end
 
 return {
     BoardSize = util.vector2(512, 768),

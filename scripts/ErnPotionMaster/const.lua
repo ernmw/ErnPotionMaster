@@ -36,4 +36,6 @@ return {
     BallRadius = 15,
     EffectScorePaneSize = util.vector2(128, 768),
     MagickColors = magickColors,
+    PopFadeoutSeconds = 2,
+    HitFlashColor = util.color.hex("FFFFFF")
 }

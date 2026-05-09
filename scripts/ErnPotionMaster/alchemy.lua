@@ -122,7 +122,8 @@ local PinClass = {
 ---@field class PinClass
 ---@field ID number
 ---@field popped boolean
-
+---@field popTimer number time that counts down post-popping for vfx.
+---@field hit boolean
 
 
 ---@class GameState
@@ -143,6 +144,8 @@ local gameState
 local window
 ---board UI element
 local board
+
+
 
 local function onStopAlchemy()
     settings.debugPrint("stop alchemy")
@@ -276,8 +279,7 @@ local function onPinHit(ballId, pinId)
         settings.debugPrint("TODO: Calcinator effect")
     end
 
-    -- todo: render a little flash on the pin and maybe scale the pin up a little or jiggle
-
+    gameState.pins[pinId].hit = true
     if math.random() < popChance() then
         settings.debugPrint("pin " .. tostring(pinId) .. " popped")
         gameState.pins[pinId].popped = true
@@ -347,7 +349,9 @@ local function getEffectPinLayouter(magicEffectWithParams)
 
         local pinInfo = gameState.pins[id]
         local pin = gameState.physics.pins[id]
-        if pin and not gameState.pins[id].popped then
+        local hitThisFrame = pinInfo.hit
+        pinInfo.hit = false
+        if pin and not pinInfo.popped then
             return {
                 type = ui.TYPE.Image,
                 props = {
@@ -366,10 +370,24 @@ local function getEffectPinLayouter(magicEffectWithParams)
                             relativePosition = util.vector2(0.5, 0.5),
                             size = const.BallSize,
                             resource = templates.shadeTexture,
-                            color = color
+                            color = hitThisFrame and const.HitFlashColor or color
                         },
                     }
                 }
+            }
+        elseif pin and pinInfo.popped and pinInfo.popTimer > 0 then
+            pinInfo.popTimer = pinInfo.popTimer - dt
+            local countDown = util.remap(pinInfo.popTimer, 0, const.PopFadeoutSeconds, 0, 1)
+            return {
+                type = ui.TYPE.Image,
+                props = {
+                    position = pin.position,
+                    anchor = util.vector2(0.5, 0.5),
+                    size = const.BallSize / (2 - countDown),
+                    resource = templates.ballTexture,
+                    color = hitThisFrame and const.HitFlashColor or color,
+                    alpha = countDown
+                },
             }
         else
             -- delete the pin from renderer
@@ -439,7 +457,13 @@ local function resetBoard(ingredientObjects, toolStrengths)
             ---@type Vector2?
             local position = table.remove(potentialSpots)
             if position then
-                gameState.pins[pinID] = { class = pinType, ID = pinID, popped = false }
+                gameState.pins[pinID] = {
+                    class = pinType,
+                    ID = pinID,
+                    popped = false,
+                    popTimer = const.PopFadeoutSeconds,
+                    hit = false
+                }
                 gameState.physics:addPin(pinID, position + midTopOffsetBorder, 0.9, const.PinRadius)
                 if pinClassesToEffectsMap[pinType] then
                     local magicEffect = pinClassesToEffectsMap[pinType]

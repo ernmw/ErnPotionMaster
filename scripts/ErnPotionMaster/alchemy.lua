@@ -358,7 +358,17 @@ local function getEffectPinLayouter(magicEffectWithParams)
                     color = color
                 },
                 content = ui.content {
-                    icon
+                    icon,
+                    {
+                        type = ui.TYPE.Image,
+                        props = {
+                            anchor = util.vector2(0.5, 0.5),
+                            relativePosition = util.vector2(0.5, 0.5),
+                            size = const.BallSize,
+                            resource = templates.shadeTexture,
+                            color = color
+                        },
+                    }
                 }
             }
         else

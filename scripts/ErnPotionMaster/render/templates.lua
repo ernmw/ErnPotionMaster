@@ -80,4 +80,7 @@ return {
     bufferPinTexture = ui.texture {
         path = "textures\\ErnPotionMaster\\circle.png"
     },
+    shadeTexture = ui.texture {
+        path = "textures\\ErnPotionMaster\\circle-ball-shade-2.png"
+    },
 }

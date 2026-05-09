@@ -318,9 +318,9 @@ local function addEffectPins(pins, pestleStrength, ingredientRecord)
     pins = pins or {}
     local ingredEffects = #(ingredientRecord.effects)
     for pinClass, effectParam in pairs(effectPinsToIngredientRecord(ingredientRecord)) do
-        -- unintended effects only get one pin
+        -- unintended effects get fewer pins
         if effectParam.effect.harmful == gameState.isPotion then
-            pins[pinClass] = 1
+            pins[pinClass] = math.ceil(8 / ingredEffects)
         end
         pins[pinClass] = math.ceil(32 / ingredEffects)
     end

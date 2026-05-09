@@ -668,7 +668,7 @@ local function onInit(data)
     -- TODO: actually do selection logic. this is just for testing
     local ingredients = {}
     for _, item in ipairs(shuffle(pself.type.inventory(pself):getAll(types.Ingredient))) do
-        if #ingredients > 2 then
+        if #ingredients >= 2 then
             break
         end
         table.insert(ingredients, item)
@@ -676,8 +676,7 @@ local function onInit(data)
 
     local toolStrengths = getToolStrengths()
 
-    local desiredEffect = getMagicEffectsFromIngredients({ types.Ingredient.record(ingredients[1]), types.Ingredient
-        .record(ingredients[2]) })[1]
+    local desiredEffect = getMagicEffectsFromIngredients({ types.Ingredient.record(ingredients[1]) })[1]
     settings.debugPrint("desired effect: " .. tostring(desiredEffect.id))
 
     resetBoard(ingredients, toolStrengths, desiredEffect)

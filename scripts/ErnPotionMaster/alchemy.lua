@@ -314,6 +314,17 @@ local function effectPinsToIngredientRecord(ingredientRecord)
     return effectPinClassToMagicEffectWithParams
 end
 
+--- TODO: just do one shot per potion. add pins for all ingreds' effects.
+--- just pick 2 ingredients, maximum. still pick the target effect you want,
+--- and ingreds will be filtered to it.
+--- tool pins:
+--- 1. chance to replace secondary effect pins with your target effect during pin placement [mortar]
+--- 2. multiball (+1 ball when you hit this pin) (chance to spawn more of these pins based on tool quality)
+--- 3. +1 life (ball teleports to top of board after it falls through) (chance to spawn more of these pins based on tool quality)
+--- 4. reset all pins (% chance per pin, based on tool quality. includes self. max chance is 90%. a pin can only be reset ONCE during the entire shot. it can be rerolled if this pin is hit multiple times though until it is a success)
+--- instead of popChance on each pin, determine if the pin is Resilient or Normal when it is placed,
+--- based on the current popChance. Resilient pins can be hit once, and then become Normal.
+--- Normal pins can be hit once, and then are popped. Resilient pins will look a little different. Maybe hexagons.
 local function addEffectPins(pins, pestleStrength, ingredientRecord)
     pins = pins or {}
     local ingredEffects = #(ingredientRecord.effects)

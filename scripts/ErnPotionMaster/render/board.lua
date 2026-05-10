@@ -68,11 +68,11 @@ function RenderBoard.new(events)
     self.boardElement = ui.create(
         {
             type = ui.TYPE.Container,
-            template = interfaces.MWUI.templates.box,
+            --template = interfaces.MWUI.templates.box,
             props = {
                 visible = true,
+                autoSize = false,
             },
-            events = events or {},
             content = ui.content {
                 {
                     name = "board",
@@ -80,6 +80,7 @@ function RenderBoard.new(events)
                     props = {
                         size = const.BoardSize,
                     },
+                    events = events or {},
                     content = ui.content {
                         {
                             template = interfaces.MWUI.templates.textNormal,

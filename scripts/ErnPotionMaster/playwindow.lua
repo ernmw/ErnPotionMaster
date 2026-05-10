@@ -547,14 +547,25 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
                 },
                 content = ui.content {
                     {
-                        name = "board",
-                        type = ui.TYPE.Widget,
+                        type = ui.TYPE.Container,
+                        template = interfaces.MWUI.templates.box,
                         props = {
                             size = const.BoardSize,
+                            visible = true,
+                            autoSize = true,
                         },
                         content = ui.content {
-                            self.trajectoryRenderer.element,
-                            self.board.boardElement,
+                            {
+                                name = "board",
+                                type = ui.TYPE.Widget,
+                                props = {
+                                    size = const.BoardSize,
+                                },
+                                content = ui.content {
+                                    self.trajectoryRenderer.element,
+                                    self.board.boardElement,
+                                }
+                            },
                         }
                     },
                     {

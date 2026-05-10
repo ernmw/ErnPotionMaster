@@ -56,12 +56,12 @@ local function dotLayout(relPos, alpha)
     return {
         type = ui.TYPE.Image,
         props = {
-            resource         = circleTex,
-            color            = DOT_COLOR,
-            alpha            = alpha,
-            size             = DOT_SIZE,
-            relativePosition = relPos,
-            anchor           = util.vector2(0.5, 0.5),
+            resource = circleTex,
+            color    = DOT_COLOR,
+            alpha    = alpha,
+            size     = DOT_SIZE,
+            position = relPos,
+            anchor   = util.vector2(0.5, 0.5),
         },
     }
 end
@@ -74,19 +74,16 @@ local function containerLayout(self)
     local n    = #self._points
 
     for i, pt in ipairs(self._points) do
-        local relX  = pt.x / self._boardSize.x
-        local relY  = pt.y / self._boardSize.y
-
         local t     = (n == 1) and 0 or ((i - 1) / (n - 1))
         local alpha = ALPHA_START + t * (ALPHA_END - ALPHA_START)
 
-        table.insert(dots, dotLayout(util.vector2(relX, relY), alpha))
+        table.insert(dots, dotLayout(pt, alpha))
     end
 
     return {
         type = ui.TYPE.Widget,
         props = {
-            size = self._boardSize,
+            size = self._boardSize:emul(util.vector2(1, 0.5)),
         },
         content = ui.content(dots),
     }

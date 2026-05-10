@@ -552,7 +552,6 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
                         props = {
                             size = const.BoardSize,
                             visible = true,
-                            autoSize = true,
                         },
                         content = ui.content {
                             {

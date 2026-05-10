@@ -71,7 +71,6 @@ function RenderBoard.new(events)
             --template = interfaces.MWUI.templates.box,
             props = {
                 visible = true,
-                autoSize = false,
             },
             content = ui.content {
                 {

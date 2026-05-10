@@ -94,7 +94,7 @@ local StateClass = {
     PLAY = 5,
     --- Allow for a quick "do it again" button that sets up the PLAY state
     --- again with the same ingredients, if they are available.
-    POTION_DONE_WINDOW = 5,
+    POTION_DONE_WINDOW = 6,
 }
 
 ---@type StateClass

@@ -590,8 +590,10 @@ local function onFrame()
     if gameState then
         local dt = core.getRealFrameDuration()
         stateHandlers[gameState.currentState](dt)
-        gameState.effectScores:onFrame(dt)
-        gameState.ingredientInfos:onFrame(dt)
+        if gameState then
+            gameState.effectScores:onFrame(dt)
+            gameState.ingredientInfos:onFrame(dt)
+        end
     end
 end
 

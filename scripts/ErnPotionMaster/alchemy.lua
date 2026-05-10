@@ -137,7 +137,7 @@ local PinClass = {
 ---@field pins {number: GamePin}
 ---@field effectScores EffectScoreContainer
 ---@field ingredientInfos IngredientInfoContainer
----@field ingredientRecords any[] all ingredients involved in this shot
+---@field actualizedIngredients ActualizedIngredient[] all ingredients involved in this shot
 ---@field magicEffectsWithParams MagicEffectWithParams[] ingredient effects, de-duplicated and sorted
 ---@field desiredMagicEffectWithParamsIdx number idx in self.magicEffectsWithParams
 ---@field physics PachinkoPhysics
@@ -392,10 +392,10 @@ end
 
 -- sets the board up for a new shot
 ---comment
----@param ingredientObjects table[]
+---@param ingredients ActualizedIngredient[]
 ---@param toolStrengths {[PinClass]:number}
 ---@param desiredMagicEffectWithParams MagicEffectWithParams
-local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWithParams)
+local function resetBoard(ingredients, toolStrengths, desiredMagicEffectWithParams)
     settings.debugPrint("resetBoard() called")
     board = renderBoard.new()
     settings.debugPrint("finished importing render board")
@@ -407,7 +407,7 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
         currentState = StateClass.TARGET_SELECTION,
         effectScores = nil,
         ingredientInfos = nil,
-        ingredientRecords = {},
+        actualizedIngredients = ingredients,
         magicEffectsWithParams = {},
         desiredMagicEffectWithParamsIdx = 0,
         -- add a little extra height so the ball can drop below
@@ -419,16 +419,15 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
     gameState.physics.onEdgeHit = onEdgeHit
     gameState.physics.onPinHit = onPinHit
 
-    for _, obj in ipairs(ingredientObjects) do
-        local record = types.Ingredient.record(obj)
-        settings.debugPrint("ingredient: " .. tostring(record.name))
-        table.insert(gameState.ingredientRecords, record)
-    end
+    gameState.ingredientInfos = ingredientInfo.new(gameState.actualizedIngredients)
 
-    gameState.ingredientInfos = ingredientInfo.new()
 
     --- get magic effects we are dealing with
-    gameState.magicEffectsWithParams = getMagicEffectsFromIngredients(gameState.ingredientRecords)
+    local recs = {}
+    for _, obj in ipairs(gameState.actualizedIngredients) do
+        table.insert(recs, obj.record)
+    end
+    gameState.magicEffectsWithParams = getMagicEffectsFromIngredients(recs)
     local idxOfDesired = search.contains(gameState.magicEffectsWithParams, function(item)
         return magicEffectsEqual(desiredMagicEffectWithParams, item)
     end)
@@ -681,6 +680,7 @@ local function getAllIngredients(inventories, mewpFilter)
     local ingredientsByRecordID = {}
     for _, inventory in ipairs(inventories) do
         for _, item in ipairs(inventory:getAll(types.Ingredient)) do
+            settings.debugPrint("checking ingredient: " .. aux_util.deepToString(item, 3))
             local record = types.Ingredient.record(item)
             local passed = false
             if mewpFilter then
@@ -691,7 +691,7 @@ local function getAllIngredients(inventories, mewpFilter)
                     end
                 end
             end
-            if passed then
+            if passed or not mewpFilter then
                 local prev = ingredientsByRecordID[record.id] or { record = record, count = 0, objects = {} }
                 prev.count = prev.count + item.count
                 table.insert(prev.objects, item)
@@ -725,11 +725,12 @@ local function onInit(data)
             break
         end
         table.insert(ingredientInfos, item)
+        settings.debugPrint("found ingredient: " .. aux_util.deepToString(item, 3))
     end
 
     local toolStrengths = getToolStrengths()
 
-    local desiredEffect = getMagicEffectsFromIngredients({ types.Ingredient.record(ingredientInfos[1]) })[1]
+    local desiredEffect = getMagicEffectsFromIngredients({ ingredientInfos[1].record })[1]
     settings.debugPrint("desired effect: " .. tostring(desiredEffect.id))
 
     resetBoard(ingredientInfos, toolStrengths, desiredEffect)

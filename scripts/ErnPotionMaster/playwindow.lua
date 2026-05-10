@@ -160,8 +160,7 @@ function PlayWindow.new(data)
         board        = nil,
         doneCallback = data.doneCallback,
     }, PlayWindow)
-    self:_resetBoard(data.ingredientInfos, data.toolStrengths, data.desiredEffect)
-    self:_openWindow()
+    self:_init(data.ingredientInfos, data.toolStrengths, data.desiredEffect)
     return self
 end
 
@@ -382,24 +381,22 @@ function PlayWindow:_getBallLayouter(ballId)
 end
 
 ------------------------------------------------------------------------
--- Board setup
+-- Board + window initialisation
 ------------------------------------------------------------------------
 
----Sets the board up for a new shot.
+---Initialises game state, populates the board with pins, and opens the UI window.
 ---@param ingredients ActualizedIngredient[]
 ---@param toolStrengths {[ToolClass]:number}
 ---@param desiredMagicEffectWithParams MagicEffectWithParams
-function PlayWindow:_resetBoard(ingredients, toolStrengths, desiredMagicEffectWithParams)
-    settings.debugPrint("_resetBoard() called")
-    self.board = renderBoard.new()
-    settings.debugPrint("finished importing render board")
+function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithParams)
+    -- Render board
+    self.board           = renderBoard.new()
 
-    self.gameState       = {
+    -- Game state
+    local gs             = {
         isPotion                        = true,
         ballID                          = 1,
         currentState                    = PlayStateClass.TARGET_SELECTION,
-        effectScores                    = nil,
-        ingredientInfos                 = nil,
         actualizedIngredients           = ingredients,
         magicEffectsWithParams          = {},
         desiredMagicEffectWithParamsIdx = 0,
@@ -409,16 +406,13 @@ function PlayWindow:_resetBoard(ingredients, toolStrengths, desiredMagicEffectWi
         pins                            = {},
         toolStrengths                   = toolStrengths,
     }
+    self.gameState       = gs
 
-    local gs             = self.gameState
-
-    -- Wire physics callbacks through self so they carry instance state
     gs.physics.onEdgeHit = function(ballId, edge) self:_onEdgeHit(ballId, edge) end
     gs.physics.onPinHit  = function(ballId, pinId) self:_onPinHit(ballId, pinId) end
 
     gs.ingredientInfos   = ingredientInfo.new(gs.actualizedIngredients)
 
-    -- Collect magic effects from all selected ingredients
     local recs           = {}
     for _, obj in ipairs(gs.actualizedIngredients) do
         table.insert(recs, obj.record)
@@ -428,14 +422,12 @@ function PlayWindow:_resetBoard(ingredients, toolStrengths, desiredMagicEffectWi
     local idxOfDesired = search.contains(gs.magicEffectsWithParams, function(item)
         return common.magicEffectsEqual(desiredMagicEffectWithParams, item)
     end)
-    if not idxOfDesired then
-        error("effect not found")
-    end
+    if not idxOfDesired then error("effect not found") end
     settings.debugPrint("found " .. tostring(#gs.magicEffectsWithParams) .. " effects")
     gs.desiredMagicEffectWithParamsIdx = idxOfDesired
     gs.effectScores = effectScore.new(gs.magicEffectsWithParams)
 
-    -- Determine per-effect pin counts, factoring in Mortar & Pestle quality
+    -- Pin counts
     local playerAlchemyFactor = util.remap(
         util.clamp(pself.type.stats.skills.alchemy(pself).modified, 0, 130), 0, 130, 1, 1.5)
     local replaceChance = util.remap(
@@ -448,12 +440,8 @@ function PlayWindow:_resetBoard(ingredients, toolStrengths, desiredMagicEffectWi
             effectPinCounts[idx] = math.ceil(const.PinsPerEffect * 1.5)
         else
             for _ = 1, const.PinsPerEffect, 1 do
-                if math.random() < replaceChance then
-                    effectPinCounts[gs.desiredMagicEffectWithParamsIdx] =
-                        (effectPinCounts[gs.desiredMagicEffectWithParamsIdx] or 0) + 1
-                else
-                    effectPinCounts[idx] = (effectPinCounts[idx] or 0) + 1
-                end
+                local target = math.random() < replaceChance and gs.desiredMagicEffectWithParamsIdx or idx
+                effectPinCounts[target] = (effectPinCounts[target] or 0) + 1
             end
         end
     end
@@ -471,23 +459,18 @@ function PlayWindow:_resetBoard(ingredients, toolStrengths, desiredMagicEffectWi
 
     local topOffset          = util.vector2(0, 0.15)
     local midTopOffsetBorder = const.BoardSize:emul(util.vector2(0, topOffset.y))
-    ---@type Vector2[]
     local potentialSpots     = placepins(
         const.BoardSize:emul(util.vector2(1, 1 - topOffset.y)), const.PinRadius, totalPins)
 
     local nextPinID          = 100
     local resChance          = self:_resilientChance()
 
-    ---Adds a single pin to gameState and the renderer.
-    ---@param pin GamePin
     local function addPin(pin)
         if pin.ID == 0 then
             pin.ID    = nextPinID
             nextPinID = nextPinID + 1
         end
-        if gs.pins[pin.ID] then
-            error("pin ID already taken")
-        end
+        if gs.pins[pin.ID] then error("pin ID already taken") end
         local position = table.remove(potentialSpots)
         if not position then
             settings.debugPrint("no space for pin " .. tostring(pin.ID))
@@ -495,12 +478,10 @@ function PlayWindow:_resetBoard(ingredients, toolStrengths, desiredMagicEffectWi
         end
         gs.pins[pin.ID] = pin
         gs.physics:addPin(pin.ID, position + midTopOffsetBorder, 0.9, const.PinRadius)
-
         if pin.class == PinClass.EFFECT then
-            local mewp = gs.magicEffectsWithParams[pin.magicEffectWithParamsIdx]
             self.board.pins:AddRenderable({
                 id     = pin.ID,
-                layout = self:_getEffectPinLayouter(mewp),
+                layout = self:_getEffectPinLayouter(gs.magicEffectsWithParams[pin.magicEffectWithParamsIdx]),
             })
         else
             self.board.pins:AddRenderable({
@@ -510,32 +491,60 @@ function PlayWindow:_resetBoard(ingredients, toolStrengths, desiredMagicEffectWi
         end
     end
 
-    for idx, count in pairs(effectPinCounts) do
-        for _ = 1, count, 1 do
-            addPin({
-                ID                       = 0,
-                class                    = PinClass.EFFECT,
-                magicEffectWithParamsIdx = idx,
-                hit                      = false,
-                popped                   = false,
-                popTimer                 = const.PopFadeoutSeconds,
-                resilient                = math.random() < resChance,
-            })
-        end
+    local function newPin(class, effectIdx)
+        return {
+            ID                       = 0,
+            class                    = class,
+            magicEffectWithParamsIdx = effectIdx,
+            hit                      = false,
+            popped                   = false,
+            popTimer                 = const.PopFadeoutSeconds,
+            resilient                = math.random() < resChance,
+        }
     end
 
-    for class, count in pairs(toolPinCounts) do
-        for _ = 1, count, 1 do
-            addPin({
-                ID        = 0,
-                class     = class,
-                hit       = false,
-                popped    = false,
-                popTimer  = const.PopFadeoutSeconds,
-                resilient = math.random() < resChance,
-            })
-        end
+    for idx, count in pairs(effectPinCounts) do
+        for _ = 1, count do addPin(newPin(PinClass.EFFECT, idx)) end
     end
+    for class, count in pairs(toolPinCounts) do
+        for _ = 1, count do addPin(newPin(class, nil)) end
+    end
+
+    -- UI window
+    self.window = ui.create({
+        layer    = "Windows",
+        type     = ui.TYPE.Container,
+        template = interfaces.MWUI.templates.boxTransparent,
+        props    = {
+            anchor           = util.vector2(0.5, 0.5),
+            relativePosition = util.vector2(0.5, 0.5),
+        },
+        content  = ui.content {
+            {
+                type    = ui.TYPE.Flex,
+                props   = {
+                    horizontal = true,
+                    align      = ui.ALIGNMENT.Center,
+                    arrange    = ui.ALIGNMENT.Center,
+                },
+                content = ui.content {
+                    self.board.boardElement,
+                    {
+                        type    = ui.TYPE.Flex,
+                        props   = {
+                            horizontal = false,
+                            align      = ui.ALIGNMENT.Center,
+                            arrange    = ui.ALIGNMENT.Center,
+                        },
+                        content = ui.content {
+                            gs.ingredientInfos.element,
+                            gs.effectScores.element,
+                        },
+                    },
+                },
+            },
+        },
+    })
 end
 
 ------------------------------------------------------------------------
@@ -596,48 +605,6 @@ function PlayWindow:_shotDone(dt)
     end
     -- TODO: forward effect score results to doneCallback
     if self.doneCallback then self.doneCallback() end
-end
-
-------------------------------------------------------------------------
--- Window creation
-------------------------------------------------------------------------
-
-function PlayWindow:_openWindow()
-    local gs = self.gameState
-    self.window = ui.create({
-        layer    = "Windows",
-        type     = ui.TYPE.Container,
-        template = interfaces.MWUI.templates.boxTransparent,
-        props    = {
-            anchor           = util.vector2(0.5, 0.5),
-            relativePosition = util.vector2(0.5, 0.5),
-        },
-        content  = ui.content {
-            {
-                type    = ui.TYPE.Flex,
-                props   = {
-                    horizontal = true,
-                    align      = ui.ALIGNMENT.Center,
-                    arrange    = ui.ALIGNMENT.Center,
-                },
-                content = ui.content {
-                    self.board.boardElement,
-                    {
-                        type    = ui.TYPE.Flex,
-                        props   = {
-                            horizontal = false,
-                            align      = ui.ALIGNMENT.Center,
-                            arrange    = ui.ALIGNMENT.Center,
-                        },
-                        content = ui.content {
-                            gs.ingredientInfos.element,
-                            gs.effectScores.element,
-                        },
-                    },
-                },
-            },
-        },
-    })
 end
 
 ------------------------------------------------------------------------

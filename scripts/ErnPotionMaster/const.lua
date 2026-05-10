@@ -76,6 +76,17 @@ for id, defaultColor in pairs(magickColorsDefault) do
     }
 end
 
+---@enum ToolClass
+local ToolClass = {
+    ALEMBIC = 3,
+    --- Reset
+    RETORT = 4,
+    --- Multiball
+    CALCINATOR = 5,
+    --- Replace effects with desired effect
+    MORTAR = 6,
+}
+
 return {
     BoardSize = scaleUI(util.vector2(512, 768)),
     PinSize = scaleUI(util.vector2(32, 32)),
@@ -90,4 +101,5 @@ return {
     HitFlashColor = util.color.hex("FFFFFF"),
     PinsPerEffect = 4,
     IngredientSize = scaleUI(util.vector2(32, 32)),
+    ToolClass = ToolClass,
 }

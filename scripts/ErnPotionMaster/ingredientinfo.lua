@@ -95,20 +95,24 @@ function IngredientInfoContainer.ingredientLayout(ingredientInfo, props)
         iconChildren[#iconChildren + 1] = {
             type = ui.TYPE.Text,
             props = {
-                text = tostring(ingredientInfo.count),
-                textColor = const.HitFlashColor,
-                textShadow = true,
-                textAlignV = ui.ALIGNMENT.End,
-                textAlignH = ui.ALIGNMENT.End,
-                relativeSize = util.vector2(1, 1),
-                relativePosition = util.vector2(0, 0),
-                textSize = 10,
+                text             = tostring(ingredientInfo.count),
+                textColor        = myui.interactiveTextColors.normal.over,
+                textShadow       = true,
+                textAlignV       = ui.ALIGNMENT.End,
+                textAlignH       = ui.ALIGNMENT.End,
+                relativeSize     = util.vector2(1, 1),
+                relativePosition = util.vector2(1, 1),
+                anchor           = util.vector2(1, 1),
+                textSize         = 14,
             },
         }
     end
 
     return {
         props = deepCopy(props or {}),
+        external = {
+            scale = 1,
+        },
         content = ui.content {
             {
                 type = ui.TYPE.Flex,
@@ -136,6 +140,7 @@ function IngredientInfoContainer.ingredientLayout(ingredientInfo, props)
                             table.unpack(iconChildren),
                         },
                     },
+                    myui.padWidget(5, 5),
                     -- Ingredient name
                     {
                         type = ui.TYPE.Text,
@@ -156,7 +161,12 @@ function IngredientInfoContainer:_layout()
     local contents = {}
 
     for _, es in ipairs(self.ingredients) do
-        table.insert(contents, IngredientInfoContainer.ingredientLayout(es))
+        table.insert(contents, IngredientInfoContainer.ingredientLayout(
+            es,
+            {
+                size = util.vector2(const.IngredientInfoPaneSize.x, 32)
+            }
+        ))
     end
 
     return {

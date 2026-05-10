@@ -154,6 +154,7 @@ local function effectScoreLayout(effectScore)
             scale = 1,
         },
         content = ui.content {
+            myui.padWidget(5, 5),
             {
                 type = ui.TYPE.Flex,
                 props = {
@@ -176,6 +177,7 @@ local function effectScoreLayout(effectScore)
                             size = effectIconSize
                         },
                     },
+                    myui.padWidget(5, 5),
                     {
                         --template = interfaces.MWUI.templates.textHeader,
                         type = ui.TYPE.Text,
@@ -192,7 +194,7 @@ local function effectScoreLayout(effectScore)
             barLayout(effectScore.score,
                 color,
                 const.EffectScorePaneSize.x),
-            myui.padWidget(10, 10),
+            myui.padWidget(5, 5),
         }
     }
 end

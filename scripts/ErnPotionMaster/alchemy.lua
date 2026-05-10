@@ -651,7 +651,18 @@ local function openWindow()
                 },
                 content = ui.content {
                     board.boardElement,
-                    gameState.effectScores.element
+                    {
+                        type = ui.TYPE.Flex,
+                        props = {
+                            horizontal = false,
+                            align = ui.ALIGNMENT.Center,
+                            arrange = ui.ALIGNMENT.Center,
+                        },
+                        content = ui.content {
+                            gameState.ingredientInfos.element,
+                            gameState.effectScores.element,
+                        },
+                    },
                 },
             },
         }
@@ -664,6 +675,7 @@ local function onFrame()
         local dt = core.getRealFrameDuration()
         stateHandlers[gameState.currentState](dt)
         gameState.effectScores:onFrame(dt)
+        gameState.ingredientInfos:onFrame(dt)
     end
 end
 

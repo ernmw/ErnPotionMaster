@@ -42,12 +42,11 @@ local ingredientInfo = require("scripts.ErnPotionMaster.ingredientinfo")
 local search         = require("scripts.ErnPotionMaster.search")
 local common         = require("scripts.ErnPotionMaster.common")
 local sprite         = require("scripts.ErnPotionMaster.render.sprite")
-local keytrack       = require("scripts.ErnEnchantersRecharge.keytrack")
+local keytrack       = require("scripts.ErnPotionMaster.keytrack")
+local trajectory     = require("scripts.ErnPotionMaster.render.trajectory")
 local input          = require("openmw.input")
 local async          = require("openmw.async")
 local ambient        = require("openmw.ambient")
-local trajectory     = require("scripts.ErnPotionMaster.render.trajectory")
-
 
 --[[
 Before you begin, you pick the target effect you want. You can only choose effects that are present in atleast two different ingredients available to you.
@@ -150,7 +149,6 @@ local resilientShine = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\circl
 ---@field window table?  openmw ui element
 ---@field board table?   render board
 ---@field shotAim Vector2?
----@field trajectoryRenderer TrajectoryRenderer?
 ---@field doneCallback fun(data)?
 local PlayWindow = {}
 PlayWindow.__index = PlayWindow
@@ -412,7 +410,7 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
             end
         end),
     })
-    self.trajectoryRenderer = trajectory.new(util.vector2(0, 0), const.BoardSize)
+    self.trajectoryRenderer = trajectory.new(const.BoardSize)
 
     -- Game state
     local gs                = {
@@ -548,7 +546,17 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
                     arrange    = ui.ALIGNMENT.Center,
                 },
                 content = ui.content {
-                    self.board.boardElement,
+                    {
+                        name = "board",
+                        type = ui.TYPE.Widget,
+                        props = {
+                            size = const.BoardSize,
+                        },
+                        content = ui.content {
+                            self.trajectoryRenderer.element,
+                            self.board.boardElement,
+                        }
+                    },
                     {
                         type    = ui.TYPE.Flex,
                         props   = {
@@ -590,6 +598,7 @@ function PlayWindow:_shootBall(directionVec)
         layout = self:_getBallLayouter(ballID),
     })
     self.trajectoryRenderer:clearTrajectory()
+    self.trajectoryRenderer:onFrame()
     gs.currentState = PlayStateClass.PHYSICS_SIMULATION
 end
 
@@ -617,7 +626,6 @@ function PlayWindow:_targetSelection(dt)
     for _, inp in pairs(keys) do
         inp:update(dt)
     end
-    print("target selection...")
     local vel = self.shotAim * const.ShootVelocity
     local points = self.gameState.physics:sampleTrajectory(const.ShootPosition, vel, 20, 18)
     self.trajectoryRenderer:setTrajectory(points)

@@ -16,103 +16,91 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 -- TrajectoryRenderer draws a dotted arc preview using sampleTrajectory().
--- Each sample point is rendered as a small circle positioned at an absolute
--- screen coordinate derived from board-space.  Dots fade in opacity toward
--- the end of the arc to give a natural "vanishing" feel.
---
--- The renderer knows nothing about its parent element; the caller is
--- responsible for supplying the board's screen-space origin via setBoardOrigin
--- whenever the layout changes.
+-- All dots live inside a single widget element (self.element) that the caller
+-- can attach wherever it likes.  The widget is sized to the board canvas and
+-- uses relative positioning internally, so dots stay aligned without the
+-- renderer needing to know its screen-space origin.
 --
 -- Usage:
---   local tr = TrajectoryRenderer.new(boardOrigin, boardSize)
+--   local tr = TrajectoryRenderer.new(boardSize)
+--   -- embed tr.element in your layout like any other element
 --   tr:setTrajectory(points)   -- pass output of physics:sampleTrajectory()
 --   tr:clearTrajectory()
 --   tr:onFrame(dt)             -- call every frame from your onFrame handler
 
 local ui                   = require("openmw.ui")
 local util                 = require("openmw.util")
-local const                = require("scripts.ErnPotionMaster.const")
 local myui                 = require("scripts.ErnPotionMaster.pcp.myui")
 
 -- Dot appearance
 local DOT_SIZE             = util.vector2(6, 6)
-local DOT_COLOR            = myui.interactiveTextColors.normal.over -- same accent as badge counts
-local ALPHA_START          = 0.85                          -- opacity of the first dot
-local ALPHA_END            = 0.15                          -- opacity of the last dot
+local DOT_COLOR            = myui.interactiveTextColors.normal.over
+local ALPHA_START          = 0.85
+local ALPHA_END            = 0.15
 
-local circleTex            = ui.texture { path = "textures\\ErnPotionMaster\\circle.png" }
+local circleTex            = ui.texture { path = "textures\\ErnPotionMaster\\circle-full.png" }
 
 ---@class TrajectoryRenderer
----@field _boardOrigin Vector2      Screen-space top-left corner of the board canvas.
----@field _boardSize   Vector2      Pixel size of the board canvas.
----@field _points      Vector2[]    Current sample positions in board units.
----@field _dotElements any[]        Live UI elements, one per dot.
----@field _dirty       boolean
+---@field element    any       The single widget element containing all dots. Embed this in your layout.
+---@field _boardSize Vector2   Pixel size of the board canvas.
+---@field _points    Vector2[] Current sample positions in board units.
+---@field _dirty     boolean
 local TrajectoryRenderer   = {}
 TrajectoryRenderer.__index = TrajectoryRenderer
 
--- Internal: build the layout table for one dot.
----@param absPos Vector2   Absolute screen position of the dot centre.
----@param alpha  number    Opacity [0..1].
+-- Internal: build a single dot's layout, positioned relative to the container.
+---@param relPos Vector2  Position in [0..1] relative to board size.
+---@param alpha  number   Opacity [0..1].
 ---@return table
-local function dotLayout(absPos, alpha)
+local function dotLayout(relPos, alpha)
     return {
         type = ui.TYPE.Image,
         props = {
-            resource = circleTex,
-            color    = DOT_COLOR,
-            alpha    = alpha,
-            size     = DOT_SIZE,
-            -- Absolute position; anchor centres the dot on the sample point.
-            position = absPos - DOT_SIZE * 0.5,
+            resource         = circleTex,
+            color            = DOT_COLOR,
+            alpha            = alpha,
+            size             = DOT_SIZE,
+            relativePosition = relPos,
+            anchor           = util.vector2(0.5, 0.5),
         },
     }
 end
 
--- Internal: destroy all live dot elements.
+-- Internal: rebuild the container layout from self._points.
 ---@param self TrajectoryRenderer
-local function destroyDots(self)
-    for _, el in ipairs(self._dotElements) do
-        el:destroy()
-    end
-    self._dotElements = {}
-end
-
--- Internal: rebuild dot elements from self._points.
----@param self TrajectoryRenderer
-local function rebuildDots(self)
-    destroyDots(self)
-
-    local n = #self._points
-    if n == 0 then return end
+---@return table
+local function containerLayout(self)
+    local dots = {}
+    local n    = #self._points
 
     for i, pt in ipairs(self._points) do
-        -- Board units → absolute screen position.
-        local absPos = self._boardOrigin + pt
+        local relX  = pt.x / self._boardSize.x
+        local relY  = pt.y / self._boardSize.y
 
-        -- Linear fade: first dot is ALPHA_START, last is ALPHA_END.
-        local t      = (n == 1) and 0 or ((i - 1) / (n - 1))
-        local alpha  = ALPHA_START + t * (ALPHA_END - ALPHA_START)
+        local t     = (n == 1) and 0 or ((i - 1) / (n - 1))
+        local alpha = ALPHA_START + t * (ALPHA_END - ALPHA_START)
 
-        local el     = ui.create(dotLayout(absPos, alpha))
-        el:update()
-
-        table.insert(self._dotElements, el)
+        table.insert(dots, dotLayout(util.vector2(relX, relY), alpha))
     end
+
+    return {
+        type = ui.TYPE.Widget,
+        props = {
+            size = self._boardSize,
+        },
+        content = ui.content(dots),
+    }
 end
 
 --- Constructor.
----@param boardOrigin Vector2  Absolute screen position of the board's top-left corner.
----@param boardSize   Vector2  Pixel dimensions of the board canvas.
+---@param boardSize Vector2  Pixel dimensions of the board canvas.
 ---@return TrajectoryRenderer
-function TrajectoryRenderer.new(boardOrigin, boardSize)
-    local self        = setmetatable({}, TrajectoryRenderer)
-    self._boardOrigin = boardOrigin
-    self._boardSize   = boardSize
-    self._points      = {}
-    self._dotElements = {}
-    self._dirty       = false
+function TrajectoryRenderer.new(boardSize)
+    local self      = setmetatable({}, TrajectoryRenderer)
+    self._boardSize = boardSize
+    self._points    = {}
+    self._dirty     = false
+    self.element    = ui.create(containerLayout(self))
     return self
 end
 
@@ -130,18 +118,19 @@ function TrajectoryRenderer:clearTrajectory()
     self._dirty  = true
 end
 
---- Call when the board moves on screen (e.g. window resize, layout change).
----@param boardOrigin Vector2
-function TrajectoryRenderer:setBoardOrigin(boardOrigin)
-    self._boardOrigin = boardOrigin
-    self._dirty       = true
+--- Update when the board canvas is resized.
+---@param boardSize Vector2
+function TrajectoryRenderer:setBoardSize(boardSize)
+    self._boardSize = boardSize
+    self._dirty     = true
 end
 
 --- Call this every frame from your script's onFrame handler.
 ---@param dt number?
 function TrajectoryRenderer:onFrame(dt)
     if self._dirty then
-        rebuildDots(self)
+        self.element.layout = containerLayout(self)
+        self.element:update()
         self._dirty = false
     end
 end

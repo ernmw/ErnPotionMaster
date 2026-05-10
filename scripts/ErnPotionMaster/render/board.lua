@@ -79,7 +79,6 @@ function RenderBoard.new(events)
                     type = ui.TYPE.Widget,
                     props = {
                         size = const.BoardSize,
-
                     },
                     content = ui.content {
                         {

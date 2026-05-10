@@ -20,7 +20,6 @@ local util  = require("openmw.util")
 local const = require("scripts.ErnPotionMaster.const")
 local myui  = require("scripts.ErnPotionMaster.pcp.myui")
 
-
 local function deepCopy(orig)
     local orig_type = type(orig)
     local copy
@@ -30,65 +29,81 @@ local function deepCopy(orig)
             copy[deepCopy(orig_key)] = deepCopy(orig_value)
         end
         setmetatable(copy, deepCopy(getmetatable(orig)))
-    else -- number, string, boolean, etc
+    else
         copy = orig
     end
     return copy
 end
 
 local function ingredientLayout(ingredientRecord, count, props)
+    local iconPath = (ingredientRecord and ingredientRecord.icon)
+        or "textures\\ErnPotionMaster\\cross.png"
+    local displayName = (ingredientRecord and ingredientRecord.name)
+        or "Select Ingredient"
+
+    -- Build the icon's child content conditionally
+    local iconChildren = {}
+    if count and count > 0 then
+        iconChildren[#iconChildren + 1] = {
+            type = ui.TYPE.Text,
+            props = {
+                text = tostring(count),
+                textColor = const.HitFlashColor,
+                textShadow = true,
+                textAlignV = ui.ALIGNMENT.End,
+                textAlignH = ui.ALIGNMENT.End,
+                relativeSize = util.vector2(1, 1),
+                relativePosition = util.vector2(0, 0),
+                textSize = 10,
+            },
+        }
+    end
+
     return {
         props = deepCopy(props or {}),
         content = ui.content {
             {
                 type = ui.TYPE.Flex,
                 props = {
-                    arrange = ui.ALIGNMENT.Center,
-                    horizontal = true,
-                    autoSize = false,
+                    arrange      = ui.ALIGNMENT.Center,
+                    horizontal   = true,
+                    autoSize     = false,
                     relativeSize = util.vector2(1, 1),
                 },
                 content = ui.content {
+                    -- Icon with badge count overlaid
                     {
-                        type = ui.TYPE.Image,
-                        path = ingredientRecord and ingredientRecord.icon or "textures\\ErnPotionMaster\\cross.png",
+                        type = ui.TYPE.Widget,
                         props = {
-                            size = util.vector2(16, 16),
+                            size = util.vector2(32, 32),
                         },
                         content = ui.content {
-                            (count > 0) and {
-                                --template = interfaces.MWUI.templates.textHeader,
-                                type = ui.TYPE.Text,
+                            {
+                                type = ui.TYPE.Image,
                                 props = {
-                                    text = count,
-                                    textColor = const.HitFlashColor,
-                                    textShadow = true,
-                                    textAlignV = ui.ALIGNMENT.Center,
-                                    textAlignH = ui.ALIGNMENT.Center,
-                                    relativePosition = util.vector2(1, 1),
-                                    anchor = util.vector2(1, 1),
-                                    textSize = 16
+                                    resource = ui.texture { path = iconPath },
+                                    size     = util.vector2(32, 32),
                                 },
-                            } or {}
-                        }
-                    },
-                    {
-                        --template = interfaces.MWUI.templates.textHeader,
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = ingredientRecord and ingredientRecord.name or "Select Ingredient",
-                            textColor = myui.interactiveTextColors.normal.default,
-                            textAlignV = ui.ALIGNMENT.Center,
-                            textSize = 18,
-                            --anchor = util.vector2(0.5, 0),
+                            },
+                            table.unpack(iconChildren),
                         },
                     },
-                }
-            }
-        }
+                    -- Ingredient name
+                    {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text       = displayName,
+                            textColor  = myui.interactiveTextColors.normal.default,
+                            textAlignV = ui.ALIGNMENT.Center,
+                            textSize   = 18,
+                        },
+                    },
+                },
+            },
+        },
     }
 end
 
 return {
-    ingredientLayout = ingredientLayout
+    ingredientLayout = ingredientLayout,
 }

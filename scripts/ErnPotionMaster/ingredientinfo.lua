@@ -79,6 +79,8 @@ local ingredientText = localization("ingredient")
 local IngredientInfoContainer   = {}
 IngredientInfoContainer.__index = IngredientInfoContainer
 
+local whiteTexture              = ui.texture { path = 'white' }
+
 ---Layout for one ingredient.
 ---@param ingredientInfo IngredientInfo
 ---@param props any
@@ -105,6 +107,17 @@ function IngredientInfoContainer.ingredientLayout(ingredientInfo, props)
                 anchor           = util.vector2(1, 1),
                 textSize         = 14,
             },
+            content = ui.content {
+                {
+                    type = ui.TYPE.Image,
+                    props = {
+                        resource = whiteTexture,
+                        color = util.color.rgb(0, 0, 0),
+                        alpha = 0.4,
+                        relativeSize = util.vector2(1, 1)
+                    },
+                }
+            }
         }
     end
 
@@ -140,7 +153,7 @@ function IngredientInfoContainer.ingredientLayout(ingredientInfo, props)
                             table.unpack(iconChildren),
                         },
                     },
-                    myui.padWidget(5, 5),
+                    myui.padWidget(const.Padding, const.Padding),
                     -- Ingredient name
                     {
                         type = ui.TYPE.Text,

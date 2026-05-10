@@ -82,6 +82,7 @@ return {
     PinRadius = scaleUI(15),
     BallSize = scaleUI(util.vector2(32, 32)),
     BallRadius = scaleUI(15),
+    Padding = scaleUI(4),
     EffectScorePaneSize = scaleUI(util.vector2(256, 576)),
     IngredientInfoPaneSize = scaleUI(util.vector2(256, 192)),
     MagickColors = magickColors,

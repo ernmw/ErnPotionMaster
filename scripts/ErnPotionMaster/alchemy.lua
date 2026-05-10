@@ -40,6 +40,7 @@ local templates      = require("scripts.ErnPotionMaster.render.templates")
 local effectScore    = require("scripts.ErnPotionMaster.effectscore")
 local ingredientInfo = require("scripts.ErnPotionMaster.ingredientinfo")
 local search         = require("scripts.ErnPotionMaster.search")
+local common         = require("scripts.ErnPotionMaster.common")
 local sprite         = require("scripts.ErnPotionMaster.render.sprite")
 
 local shootPosition  = util.vector2(0.5, 0.05):emul(const.BoardSize)
@@ -238,7 +239,7 @@ local function onPinHit(ballId, pinId)
     elseif gameState.pins[pinId].class == PinClass.CALCINATOR then
         settings.debugPrint("TODO: Calcinator effect")
     elseif gameState.pins[pinId].class == PinClass.MORTAR then
-        settings.debugPrint("TODO: Mortar effect")
+        -- mortar is not a pin
     end
 
     gameState.pins[pinId].hit = true
@@ -251,48 +252,7 @@ local function onPinHit(ballId, pinId)
     end
 end
 
----comment
----@param a MagicEffectWithParams
----@param b MagicEffectWithParams
----@return boolean
-local function magicEffectsEqual(a, b)
-    return a.affectedAttribute == b.affectedAttribute and
-        a.affectedSkill == b.affectedSkill and
-        a.id == b.id
-end
 
----@param a MagicEffectWithParams
----@param b MagicEffectWithParams
----@return boolean
-local function magicEffectSortFn(a, b)
-    if a.id ~= b.id then
-        return a.id < b.id
-    end
-    if a.affectedAttribute ~= b.affectedAttribute then
-        return a.affectedAttribute < b.affectedAttribute
-    end
-    if a.affectedSkill ~= b.affectedSkill then
-        return a.affectedSkill < b.affectedSkill
-    end
-    return false
-end
-
----@param ingredientRecords table[]
----@return MagicEffectWithParams[]
-local function getMagicEffectsFromIngredients(ingredientRecords)
-    local outEffects = {}
-    for _, ingred in ipairs(ingredientRecords) do
-        for idx, effectParam in ipairs(ingred.effects) do
-            if not search.contains(outEffects,
-                    function(a) return magicEffectsEqual(a, effectParam) end) then
-                table.insert(outEffects, effectParam)
-            end
-        end
-    end
-
-    table.sort(outEffects, magicEffectSortFn)
-    return outEffects
-end
 
 --- TODO: just do one shot per potion. add pins for all ingreds' effects.
 --- just pick 2 ingredients, maximum. still pick the target effect you want,
@@ -427,9 +387,9 @@ local function resetBoard(ingredients, toolStrengths, desiredMagicEffectWithPara
     for _, obj in ipairs(gameState.actualizedIngredients) do
         table.insert(recs, obj.record)
     end
-    gameState.magicEffectsWithParams = getMagicEffectsFromIngredients(recs)
+    gameState.magicEffectsWithParams = common.getMagicEffectsFromIngredients(recs)
     local idxOfDesired = search.contains(gameState.magicEffectsWithParams, function(item)
-        return magicEffectsEqual(desiredMagicEffectWithParams, item)
+        return common.magicEffectsEqual(desiredMagicEffectWithParams, item)
     end)
     if not idxOfDesired then
         error("effect not found")
@@ -680,52 +640,6 @@ local function onFrame()
     end
 end
 
----@class ActualizedIngredient: IngredientInfo
----@field objects table[] actual objects of this type
-
---- finds all ingredients in the given list of inventories that pass the magic effect filter.
----@param inventories table[]?
----@param mewpFilter (fun(a: MagicEffectWithParams): boolean)?
----@return ActualizedIngredient[]
-local function getAllIngredients(inventories, mewpFilter)
-    inventories = inventories or { pself.type.inventory(pself) }
-    ---@type { [string]: ActualizedIngredient}
-    local ingredientsByRecordID = {}
-    for _, inventory in ipairs(inventories) do
-        for _, item in ipairs(inventory:getAll(types.Ingredient)) do
-            settings.debugPrint("checking ingredient: " .. aux_util.deepToString(item, 3))
-            local record = types.Ingredient.record(item)
-            local passed = false
-            if mewpFilter then
-                for _, mewp in ipairs(getMagicEffectsFromIngredients({ record })) do
-                    if mewpFilter(mewp) then
-                        passed = true
-                        break
-                    end
-                end
-            end
-            if passed or not mewpFilter then
-                local prev = ingredientsByRecordID[record.id] or { record = record, count = 0, objects = {} }
-                prev.count = prev.count + item.count
-                table.insert(prev.objects, item)
-                ingredientsByRecordID[record.id] = prev
-            end
-        end
-    end
-
-    --- now sort
-    local out = {}
-
-    for _, ingred in pairs(ingredientsByRecordID) do
-        local insertIndex = search.binarySearch(out, function(p)
-            return ingred.record.id > p.record.id
-        end)
-        table.insert(out, insertIndex, ingred)
-    end
-
-
-    return out
-end
 
 local function onInit(data)
     settings.debugPrint("start alchemy")
@@ -733,7 +647,7 @@ local function onInit(data)
     -- TODO: actually do selection logic. this is just for testing
     ---@type IngredientInfo[]
     local ingredientInfos = {}
-    for _, item in ipairs(shuffle(getAllIngredients())) do
+    for _, item in ipairs(shuffle(common.getAllIngredients())) do
         if #ingredientInfos >= 2 then
             break
         end
@@ -743,7 +657,7 @@ local function onInit(data)
 
     local toolStrengths = getToolStrengths()
 
-    local desiredEffect = getMagicEffectsFromIngredients({ ingredientInfos[1].record })[1]
+    local desiredEffect = common.getMagicEffectsFromIngredients({ ingredientInfos[1].record })[1]
     settings.debugPrint("desired effect: " .. tostring(desiredEffect.id))
 
     resetBoard(ingredientInfos, toolStrengths, desiredEffect)

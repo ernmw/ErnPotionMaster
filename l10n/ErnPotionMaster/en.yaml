@@ -9,8 +9,10 @@ debugMode_description: "Turn on verbose logging. Please turn this on and grab th
 
 modSettingsUITitle: "UI"
 enableCustomUIScale_name: "Use Custom UI Scale"
-enableCustomUIScale_description: "Turn on to scale the alchemy window separately from your other windows."
+enableCustomUIScale_description: "Turn on to scale the alchemy window separately from your other windows. This might look awful."
 customUIScale_name: "Custom UI Scale Factor"
 
 effectWithParam: "{effectName}: {effectParam}"
 ingredient: "Ingredient"
+mainEffect: "Primary Effect"
+sideEffects: "Side Effects"

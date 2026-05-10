@@ -40,6 +40,7 @@ local colorutil    = require("scripts.ErnPotionMaster.colorutil")
 local myui         = require("scripts.ErnPotionMaster.pcp.myui")
 local templates    = require("scripts.ErnPotionMaster.render.templates")
 local localization = core.l10n(MOD_NAME)
+local common       = require("scripts.ErnPotionMaster.common")
 
 ---@class MagicEffectWithParams any This is a openmw.core#MagicEffectWithParams
 ---@field affectedAttribute string
@@ -154,7 +155,7 @@ local function effectScoreLayout(effectScore)
             scale = 1,
         },
         content = ui.content {
-            myui.padWidget(5, 5),
+            myui.padWidget(const.Padding, const.Padding),
             {
                 type = ui.TYPE.Flex,
                 props = {
@@ -177,7 +178,7 @@ local function effectScoreLayout(effectScore)
                             size = effectIconSize
                         },
                     },
-                    myui.padWidget(5, 5),
+                    myui.padWidget(const.Padding, const.Padding),
                     {
                         --template = interfaces.MWUI.templates.textHeader,
                         type = ui.TYPE.Text,
@@ -194,7 +195,7 @@ local function effectScoreLayout(effectScore)
             barLayout(effectScore.score,
                 color,
                 const.EffectScorePaneSize.x),
-            myui.padWidget(5, 5),
+            myui.padWidget(const.Padding, const.Padding),
         }
     }
 end
@@ -269,9 +270,7 @@ function EffectScoreContainer:modifyEffectScore(magicEffectParams, modFn)
 
     ---@param es EffectScore
     for idx, es in ipairs(self.scores) do
-        if es.magicEffectParams.affectedAttribute == magicEffectParams.affectedAttribute and
-            es.magicEffectParams.affectedSkill == magicEffectParams.affectedSkill and
-            es.magicEffectParams.id == magicEffectParams.id then
+        if common.magicEffectsEqual(es.magicEffectParams, magicEffectParams) then
             local newScore = modFn(es)
             if newScore then
                 newScore.deltaVFX = 1

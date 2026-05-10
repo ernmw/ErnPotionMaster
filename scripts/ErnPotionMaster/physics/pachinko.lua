@@ -1,21 +1,3 @@
---[[
-ErnPotionMaster for OpenMW.
-Copyright (C) 2026 Erin Pentecost
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU Affero General Public License as
-published by the Free Software Foundation, either version 3 of the
-License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU Affero General Public License for more details.
-
-You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-]]
-
 local util = require("openmw.util")
 
 ---@alias ID number
@@ -266,6 +248,64 @@ function PachinkoPhysics:advanceSimulation(dt)
     end
 
     self._isStepping = false
+end
+
+-- Trajectory prediction
+
+--- Traces a ballistic arc under the board's gravity with no pin/edge interaction.
+--- Useful for drawing a launch preview curve.
+---
+--- @param startPos  Vector2   World-space origin of the curve.
+--- @param startVel  Vector2   Initial velocity (same units as the simulation).
+--- @param samples   integer   Number of points to return (including the start). Min 2.
+--- @param stepLen   number    Distance between consecutive samples (board units).
+---                            The integrator advances time until the ball has travelled
+---                            at least this far, so output points are evenly spaced in
+---                            arc-length rather than in time.
+--- @return Vector2[]          List of `samples` positions along the arc.
+function PachinkoPhysics:sampleTrajectory(startPos, startVel, samples, stepLen)
+    samples = math.max(2, math.floor(samples))
+    stepLen = math.max(1e-6, stepLen)
+
+    local result = { startPos }
+
+    local pos = startPos
+    local vel = startVel
+
+    -- Fixed internal time-step upper bound.  Small enough to keep arc-length
+    -- error low at high speeds, large enough not to be expensive.
+    local BASE_DT = 1 / 120 -- seconds
+
+    for _ = 2, samples do
+        local distAccum = 0
+
+        -- Integrate until we've covered at least stepLen in arc-length.
+        while distAccum < stepLen do
+            local spd = vel:length()
+
+            -- Adaptive dt: aim to cross the remaining gap in ~10 ticks,
+            -- capped at BASE_DT so we don't take huge leaps on slow balls.
+            local remaining = stepLen - distAccum
+            local dt
+            if spd > 1e-6 then
+                dt = math.min(remaining / (spd * 10), BASE_DT)
+                -- Final-approach clamp: don't overshoot by more than one BASE_DT worth
+                dt = math.min(dt, remaining / spd)
+            else
+                dt = BASE_DT
+            end
+
+            local prevPos = pos
+            vel = vel + self.gravity * dt
+            pos = pos + vel * dt
+
+            distAccum = distAccum + (pos - prevPos):length()
+        end
+
+        table.insert(result, pos)
+    end
+
+    return result
 end
 
 return PachinkoPhysics

@@ -15,9 +15,49 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
-local util                = require("openmw.util")
-local core                = require("openmw.core")
-local colorutil           = require("scripts.ErnPotionMaster.colorutil")
+local util      = require("openmw.util")
+local core      = require("openmw.core")
+local colorutil = require("scripts.ErnPotionMaster.colorutil")
+local ui        = require("openmw.ui")
+local settings  = require("scripts.ErnPotionMaster.settings.settings")
+
+--- find scale
+---@param layerName string?
+---@return number
+local function findScale(layerName)
+    layerName = layerName or "Windows"
+    ---@type Vector2
+    local layerSize
+    for i, layer in ipairs(ui.layers) do
+        if layer.name == layerName then
+            layerSize = layer.size
+        end
+    end
+    if not layerSize then
+        error("layer " .. tostring(layerName) .. " not found")
+    end
+    ---@type Vector2
+    local screenSize = ui.screenSize()
+    local scaleVec = layerSize:ediv(screenSize)
+    -- these should be the same
+    return scaleVec.x
+end
+local windowsScale = findScale()
+--- scaling factor = 1.15
+--- windowsScale: (0.869270861148834228515625, 0.869444429874420166015625)
+-- minimum res is 720x480 pixels
+--print("windowsScale: " .. tostring(windowsScale))
+
+---@generic T: Vector2|number
+---@param size T
+---@return T
+local function scaleUI(size)
+    if settings.ui.enableCustomUIScale then
+        return size * windowsScale * util.clamp(settings.ui.customUIScale, 0.25, 4)
+    else
+        return size
+    end
+end
 
 local magickColorsDefault = {
     alteration = util.color.hex("9A4CB3"),
@@ -37,16 +77,16 @@ for id, defaultColor in pairs(magickColorsDefault) do
 end
 
 return {
-    BoardSize = util.vector2(512, 768),
-    PinSize = util.vector2(32, 32),
-    PinRadius = 15,
-    BallSize = util.vector2(32, 32),
-    BallRadius = 15,
-    EffectScorePaneSize = util.vector2(256, 576),
-    IngredientInfoPaneSize = util.vector2(256, 192),
+    BoardSize = scaleUI(util.vector2(512, 768)),
+    PinSize = scaleUI(util.vector2(32, 32)),
+    PinRadius = scaleUI(15),
+    BallSize = scaleUI(util.vector2(32, 32)),
+    BallRadius = scaleUI(15),
+    EffectScorePaneSize = scaleUI(util.vector2(256, 576)),
+    IngredientInfoPaneSize = scaleUI(util.vector2(256, 192)),
     MagickColors = magickColors,
     PopFadeoutSeconds = 2,
     HitFlashColor = util.color.hex("FFFFFF"),
     PinsPerEffect = 4,
-    IngredientSize = util.vector2(32, 32),
+    IngredientSize = scaleUI(util.vector2(32, 32)),
 }

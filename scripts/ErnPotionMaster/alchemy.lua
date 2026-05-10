@@ -443,12 +443,13 @@ local function resetBoard(ingredients, toolStrengths, desiredMagicEffectWithPara
         1.5)
     -- tool strength is from 0.5 to 2
     local replaceChance = util.remap(util.clamp(playerAlchemyFactor * toolStrengths[PinClass.MORTAR], 0.5, 3), 0.5, 3, 0,
-        0.8)
+        0.95)
     ---@type {[number]:number}
     local effectPinCounts = {}
     for idx, mewp in ipairs(gameState.magicEffectsWithParams) do
         if idx == gameState.desiredMagicEffectWithParamsIdx then
-            effectPinCounts[idx] = const.PinsPerEffect
+            -- special treatment for the desired effect
+            effectPinCounts[idx] = math.ceil(const.PinsPerEffect * 1.5)
         else
             for _ = 1, const.PinsPerEffect, 1 do
                 --- mortar has a chance to replace undesired effects

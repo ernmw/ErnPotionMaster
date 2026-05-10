@@ -25,6 +25,7 @@ local function groupKey(groupName)
 end
 
 local adminGroupKey = groupKey("Admin")
+local uiGroupKey = groupKey("UI")
 
 local function init()
     interfaces.Settings.registerPage {
@@ -38,7 +39,6 @@ local function init()
         key = adminGroupKey,
         l10n = MOD_NAME,
         name = "modSettingsAdminTitle",
-        description = "modSettingsAdminDesc",
         page = MOD_NAME,
         permanentStorage = true,
         order = 10,
@@ -54,7 +54,31 @@ local function init()
             description = "debugMode_description",
             default = false,
             renderer = "checkbox"
-        } }
+        }
+        }
+    }
+
+    interfaces.Settings.registerGroup {
+        key = uiGroupKey,
+        l10n = MOD_NAME,
+        name = "modSettingsUITitle",
+        page = MOD_NAME,
+        permanentStorage = true,
+        order = 10,
+        settings = { {
+            key = "enableCustomUIScale",
+            name = "enableCustomUIScale_name",
+            description = "enableCustomUIScale_description",
+            default = false,
+            renderer = "checkbox"
+        }, {
+            key = "customUIScale",
+            name = "customUIScale_name",
+            renderer = "number",
+            default = 1,
+            argument = { integer = false, min = 0.25, max = 4 },
+        }
+        }
     }
 end
 
@@ -102,6 +126,7 @@ local function newContainer(groupKeyParam)
     return container
 end
 
+local uiContainer = newContainer(uiGroupKey)
 local adminContainer = newContainer(adminGroupKey)
 
 local function debugPrint(str, ...)
@@ -120,10 +145,12 @@ end
 ---@class Settings
 ---@field init fun()
 ---@field admin SettingContainer
+---@field ui SettingContainer
 
 ---@type Settings
 return {
     init = init,
+    ui = uiContainer,
     admin = adminContainer,
     debugPrint = debugPrint,
 }

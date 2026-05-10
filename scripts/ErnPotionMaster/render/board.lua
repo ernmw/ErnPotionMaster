@@ -37,11 +37,6 @@ RenderBoard.__index = RenderBoard
 
 local MIN_UPDATE    = 1 / 63
 
--- Iterate through all layers
-for i, layer in ipairs(ui.layers) do
-    print('layer', i, layer.name, layer.size)
-end
-
 ---@return RenderBoard
 function RenderBoard.new()
     local self = setmetatable({}, RenderBoard)

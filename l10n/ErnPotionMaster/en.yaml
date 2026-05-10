@@ -1,12 +1,16 @@
 name: "Potion Master"
 description: "Pachinko Alchemy."
 
+modSettingsAdminTitle: "Admin"
 disable_name: "Disable Mod"
 disable_description: "Turn the mod off."
-
 debugMode_name: "Debug Mode"
 debugMode_description: "Turn on verbose logging. Please turn this on and grab the log if you are going to report an issue."
 
-effectWithParam: "{effectName}: {effectParam}"
+modSettingsUITitle: "UI"
+enableCustomUIScale_name: "Use Custom UI Scale"
+enableCustomUIScale_description: "Turn on to scale the alchemy window separately from your other windows."
+customUIScale_name: "Custom UI Scale Factor"
 
+effectWithParam: "{effectName}: {effectParam}"
 ingredient: "Ingredient"

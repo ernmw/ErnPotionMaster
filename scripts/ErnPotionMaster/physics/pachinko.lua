@@ -259,50 +259,82 @@ end
 --- @param startVel  Vector2   Initial velocity (same units as the simulation).
 --- @param samples   integer   Number of points to return (including the start). Min 2.
 --- @param stepLen   number    Distance between consecutive samples (board units).
----                            The integrator advances time until the ball has travelled
----                            at least this far, so output points are evenly spaced in
----                            arc-length rather than in time.
+---                            Output points are evenly spaced in arc-length.
 --- @return Vector2[]          List of `samples` positions along the arc.
 function PachinkoPhysics:sampleTrajectory(startPos, startVel, samples, stepLen)
-    samples = math.max(2, math.floor(samples))
-    stepLen = math.max(1e-6, stepLen)
+    samples            = math.max(2, math.floor(samples))
+    stepLen            = math.max(1e-6, stepLen)
 
-    local result = { startPos }
+    -- Under constant gravity the trajectory is:
+    --   p(t) = origin + vel*t + 0.5*gravity*t²
+    --
+    -- Arc-length of that quadratic has no closed form, so we find the time t
+    -- for each sample using Newton's method on:
+    --   f(t) = |p(t) - p(0)| - stepLen = 0
+    --
+    -- Starting guess: t = stepLen / speed (straight-line estimate).
+    -- Converges in 3-5 iterations for all non-degenerate cases.
+    -- No inner loop, no busy-wait.
 
-    local pos = startPos
-    local vel = startVel
+    local NEWTON_ITERS = 6
+    local MIN_DT       = 1e-9 -- guards against division by zero in degenerate cases
 
-    -- Fixed internal time-step upper bound.  Small enough to keep arc-length
-    -- error low at high speeds, large enough not to be expensive.
-    local BASE_DT = 1 / 120 -- seconds
+    local result       = { startPos }
+    local origin       = startPos -- reset each sample; vel already carries history
+    local vel          = startVel
 
     for _ = 2, samples do
-        local distAccum = 0
+        local g   = self.gravity
+        local spd = vel:length()
 
-        -- Integrate until we've covered at least stepLen in arc-length.
-        while distAccum < stepLen do
-            local spd = vel:length()
-
-            -- Adaptive dt: aim to cross the remaining gap in ~10 ticks,
-            -- capped at BASE_DT so we don't take huge leaps on slow balls.
-            local remaining = stepLen - distAccum
-            local dt
-            if spd > 1e-6 then
-                dt = math.min(remaining / (spd * 10), BASE_DT)
-                -- Final-approach clamp: don't overshoot by more than one BASE_DT worth
-                dt = math.min(dt, remaining / spd)
+        -- Seed t: time to travel stepLen at current speed, or a small fallback
+        -- when nearly stationary so gravity alone carries the ball.
+        local t
+        if spd > 1e-6 then
+            t = stepLen / spd
+        else
+            -- v≈0: stepLen = 0.5*|g|*t²  →  t = sqrt(2*stepLen/|g|)
+            local gspd = g:length()
+            if gspd > 1e-6 then
+                t = math.sqrt(2 * stepLen / gspd)
             else
-                dt = BASE_DT
+                -- Truly motionless and no gravity: place dots at origin.
+                t = 1.0
             end
-
-            local prevPos = pos
-            vel = vel + self.gravity * dt
-            pos = pos + vel * dt
-
-            distAccum = distAccum + (pos - prevPos):length()
         end
 
-        table.insert(result, pos)
+        -- Newton iterations: find t such that |p(t) - origin| = stepLen.
+        for _ = 1, NEWTON_ITERS do
+            -- p(t) - origin  =  vel*t + 0.5*g*t²
+            local disp = vel * t + g * (0.5 * t * t)
+            local dist = disp:length()
+
+            if dist < 1e-12 then
+                -- Ball hasn't moved at all; nudge t forward and break.
+                t = t + MIN_DT
+                break
+            end
+
+            -- f  = dist - stepLen
+            -- f' = d/dt |disp(t)|  =  disp · disp' / |disp|
+            --      where disp'(t) = vel + g*t
+            local dispDot = vel + g * t
+            local fPrime  = disp:dot(dispDot) / dist
+
+            local f       = dist - stepLen
+
+            if math.abs(fPrime) < 1e-12 then break end
+
+            t = t - f / fPrime
+            if t < MIN_DT then t = MIN_DT end
+        end
+
+        -- Evaluate p(t) and advance state for the next sample.
+        local newPos = origin + vel * t + g * (0.5 * t * t)
+        vel          = vel + g * t -- velocity at the new origin
+        origin       = newPos
+
+        table.insert(result, newPos)
     end
 
     return result

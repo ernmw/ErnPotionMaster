@@ -46,6 +46,7 @@ local keytrack       = require("scripts.ErnEnchantersRecharge.keytrack")
 local input          = require("openmw.input")
 local async          = require("openmw.async")
 local ambient        = require("openmw.ambient")
+local trajectory     = require("scripts.ErnPotionMaster.render.trajectory")
 
 
 --[[
@@ -149,6 +150,7 @@ local resilientShine = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\circl
 ---@field window table?  openmw ui element
 ---@field board table?   render board
 ---@field shotAim Vector2?
+---@field trajectoryRenderer TrajectoryRenderer?
 ---@field doneCallback fun(data)?
 local PlayWindow = {}
 PlayWindow.__index = PlayWindow
@@ -389,9 +391,12 @@ end
 ---@param toolStrengths {[ToolClass]:number}
 ---@param desiredMagicEffectWithParams MagicEffectWithParams
 function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithParams)
+    local physicsContainer  = physics.new(
+        const.BoardSize + util.vector2(0, 1.5 * const.BallSize.y)
+    )
     -- Render board
-    self.shotAim         = util.vector2(1, 0)
-    self.board           = renderBoard.new({
+    self.shotAim            = util.vector2(1, 0)
+    self.board              = renderBoard.new({
         mousePress = async:callback(function(data, elem)
             if self.gameState and self.gameState.currentState == PlayStateClass.TARGET_SELECTION then
                 if data.button == 1 then
@@ -400,31 +405,35 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
                     self:_shootBall(self.shotAim)
                 end
             end
-        end)
+        end),
+        mouseMove = async:callback(function(data, elem)
+            if self.gameState and self.gameState.currentState == PlayStateClass.TARGET_SELECTION and self.trajectoryRenderer then
+                self.shotAim = (data.offset - const.ShootPosition):normalize()
+            end
+        end),
     })
+    self.trajectoryRenderer = trajectory.new(util.vector2(0, 0), const.BoardSize)
 
     -- Game state
-    local gs             = {
+    local gs                = {
         isPotion                        = true,
         ballID                          = 1,
         currentState                    = PlayStateClass.TARGET_SELECTION,
         actualizedIngredients           = ingredients,
         magicEffectsWithParams          = {},
         desiredMagicEffectWithParamsIdx = 0,
-        physics                         = physics.new(
-            const.BoardSize + util.vector2(0, 1.5 * const.BallSize.y)
-        ),
+        physics                         = physicsContainer,
         pins                            = {},
         toolStrengths                   = toolStrengths,
     }
-    self.gameState       = gs
+    self.gameState          = gs
 
-    gs.physics.onEdgeHit = function(ballId, edge) self:_onEdgeHit(ballId, edge) end
-    gs.physics.onPinHit  = function(ballId, pinId) self:_onPinHit(ballId, pinId) end
+    gs.physics.onEdgeHit    = function(ballId, edge) self:_onEdgeHit(ballId, edge) end
+    gs.physics.onPinHit     = function(ballId, pinId) self:_onPinHit(ballId, pinId) end
 
-    gs.ingredientInfos   = ingredientInfo.new(gs.actualizedIngredients)
+    gs.ingredientInfos      = ingredientInfo.new(gs.actualizedIngredients)
 
-    local recs           = {}
+    local recs              = {}
     for _, obj in ipairs(gs.actualizedIngredients) do
         table.insert(recs, obj.record)
     end
@@ -580,6 +589,7 @@ function PlayWindow:_shootBall(directionVec)
         id     = ballID,
         layout = self:_getBallLayouter(ballID),
     })
+    self.trajectoryRenderer:clearTrajectory()
     gs.currentState = PlayStateClass.PHYSICS_SIMULATION
 end
 
@@ -607,10 +617,11 @@ function PlayWindow:_targetSelection(dt)
     for _, inp in pairs(keys) do
         inp:update(dt)
     end
-    -- TODO: fill out stub – for now just fire a random ball
-    --[[self:_shootBall(util.vector2(math.random(), math.random()) * 5)
-    self.gameState.currentState = PlayStateClass.PHYSICS_SIMULATION
-    ]]
+    print("target selection...")
+    local vel = self.shotAim * const.ShootVelocity
+    local points = self.gameState.physics:sampleTrajectory(const.ShootPosition, vel, 20, 18)
+    self.trajectoryRenderer:setTrajectory(points)
+    self.trajectoryRenderer:onFrame(dt)
     self.board:onFrame(dt)
     self.window:update()
 end

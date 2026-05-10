@@ -81,17 +81,6 @@ After making your predetermined number of Shots (2 to 4), the potion is created 
 Pins have a chance to Pop when they are hit based on your Alchemy skill, Intelligence, and Luck.
 ]]
 
----Returns the chance that a Pin will Pop when it is hit.
----If it pops, it gets deleted. The pin hit effect still takes place, though.
----@return number between 0.1 and 1
-local function resilientChance()
-    local playerAlchemy = util.remap(util.clamp(pself.type.stats.skills.alchemy(pself).modified, 0, 130), 0, 130, 0, 0.7)
-    local playerLuck = util.remap(util.clamp(pself.type.stats.attributes.luck(pself).modified, 0, 130), 0, 130, 0, 0.1)
-    local playerIntelligence = util.remap(util.clamp(pself.type.stats.attributes.intelligence(pself).modified, 0, 130), 0,
-        130, 0, .2)
-    return util.clamp(1 - playerAlchemy - playerLuck - playerIntelligence, 0.1, 1)
-end
-
 ---@enum PlayStateClass
 local PlayStateClass = {
     --- The player is picking their shot.
@@ -138,87 +127,7 @@ local PinClass = {
 ---@field physics PachinkoPhysics
 ---@field toolStrengths {[PinClass]:number}
 
----@type GameState?
-local gameState
-
----main window element
-local window
----board UI element
-local board
-
----@type fun(data)?
-local doneCallback
-
-
-local function onEdgeHit(ballId, edge)
-    if not gameState then
-        error("onEdgeHit(): gameState is nil")
-        return
-    end
-    if not ballId or not edge then
-        error("onEdgeHit(): param(s) nil")
-        return
-    end
-    settings.debugPrint("ball " .. tostring(ballId) .. " hit edge " .. tostring(edge))
-    if edge == "bottom" then
-        settings.debugPrint("ball hit bottom edge")
-        gameState.currentState = PlayStateClass.SHOT_DONE
-    end
-end
-
----comment
----@param original EffectScore
----@return EffectScore
-local function effectPinHit(original)
-    original.multiplier = original.multiplier + 0.05
-    original.score = original.score + 0.3 + original.multiplier
-    settings.debugPrint("effect " ..
-        tostring(original.magicEffectParams.id) .. " score is now " .. tostring(original.score))
-    return original
-end
-
-local function onPinHit(ballId, pinId)
-    if not gameState then
-        error("onPinHit(): gameState is nil")
-        return
-    end
-    if not ballId or not pinId then
-        error("onPinHit(): param(s) nil")
-        return
-    end
-    settings.debugPrint("ball " .. tostring(ballId) .. " hit pin " .. tostring(pinId))
-    if not gameState.pins[pinId] then
-        error("onPinHit(): unknown pinId")
-        return
-    end
-
-    if gameState.pins[pinId].class == PinClass.EFFECT then
-        local effect = gameState.magicEffectsWithParams[gameState.pins[pinId].magicEffectWithParamsIdx]
-        if not effect then
-            error("onPinHit(): invalid effect " .. tostring(gameState.pins[pinId].magicEffectWithParamsIdx))
-            return
-        end
-        gameState.effectScores:modifyEffectScore(effect, effectPinHit)
-    elseif gameState.pins[pinId].class == PinClass.ALEMBIC then
-        settings.debugPrint("TODO: Alembic effect")
-    elseif gameState.pins[pinId].class == PinClass.RETORT then
-        settings.debugPrint("TODO: Retort effect")
-    elseif gameState.pins[pinId].class == PinClass.CALCINATOR then
-        settings.debugPrint("TODO: Calcinator effect")
-    elseif gameState.pins[pinId].class == PinClass.MORTAR then
-        -- mortar is not a pin
-    end
-
-    gameState.pins[pinId].hit = true
-    if gameState.pins[pinId].resilient then
-        gameState.pins[pinId].resilient = false
-    else
-        settings.debugPrint("pin " .. tostring(pinId) .. " popped")
-        gameState.pins[pinId].popped = true
-        gameState.physics.pins[pinId].enabled = false
-    end
-end
-
+-- Module-level animated image (stateless across instances, safe to share)
 local resilientShine = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\circle-sweep.png",
     util.vector2(2 * 64, 2 * 64),
     4, 10, nil, {
@@ -228,50 +137,176 @@ local resilientShine = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\circl
         color = util.color.hex("D4AF37"),
     })
 
-local function getEffectPinLayouter(magicEffectWithParams)
-    local color = const.MagickColors[magicEffectWithParams.effect.school].default or magicEffectWithParams.effect.color
-    local shadeColor = const.MagickColors[magicEffectWithParams.effect.school].highlight or
-        magicEffectWithParams.effect.color
+------------------------------------------------------------------------
+-- PlayWindow class
+------------------------------------------------------------------------
+
+---@class PlayWindow
+---@field gameState GameState?
+---@field window table?  openmw ui element
+---@field board table?   render board
+---@field doneCallback fun(data)?
+local PlayWindow = {}
+PlayWindow.__index = PlayWindow
+
+---Constructor. Creates, initialises, and opens a PlayWindow.
+---@param data {ingredientInfos: ActualizedIngredient[], toolStrengths: table, desiredEffect: MagicEffectWithParams, doneCallback: fun(data)}
+---@return PlayWindow
+function PlayWindow.new(data)
+    settings.debugPrint("start alchemy play window: " .. aux_util.deepToString(data, 3))
+    local self = setmetatable({
+        gameState    = nil,
+        window       = nil,
+        board        = nil,
+        doneCallback = data.doneCallback,
+    }, PlayWindow)
+    self:_resetBoard(data.ingredientInfos, data.toolStrengths, data.desiredEffect)
+    self:_openWindow()
+    return self
+end
+
+------------------------------------------------------------------------
+-- Private helpers (receive self explicitly)
+------------------------------------------------------------------------
+
+---Returns the chance that a Pin will Pop when hit (0.1 – 1).
+---@return number
+function PlayWindow:_resilientChance()
+    local playerAlchemy = util.remap(
+        util.clamp(pself.type.stats.skills.alchemy(pself).modified, 0, 130), 0, 130, 0, 0.7)
+    local playerLuck = util.remap(
+        util.clamp(pself.type.stats.attributes.luck(pself).modified, 0, 130), 0, 130, 0, 0.1)
+    local playerIntelligence = util.remap(
+        util.clamp(pself.type.stats.attributes.intelligence(pself).modified, 0, 130), 0, 130, 0, 0.2)
+    return util.clamp(1 - playerAlchemy - playerLuck - playerIntelligence, 0.1, 1)
+end
+
+---@param original EffectScore
+---@return EffectScore
+local function effectPinHit(original)
+    original.multiplier = original.multiplier + 0.05
+    original.score      = original.score + 0.3 + original.multiplier
+    settings.debugPrint("effect " ..
+        tostring(original.magicEffectParams.id) .. " score is now " .. tostring(original.score))
+    return original
+end
+
+---Called by the physics engine when a ball reaches an edge.
+---@param ballId number
+---@param edge string
+function PlayWindow:_onEdgeHit(ballId, edge)
+    if not self.gameState then
+        error("_onEdgeHit(): gameState is nil")
+        return
+    end
+    if not ballId or not edge then
+        error("_onEdgeHit(): param(s) nil")
+        return
+    end
+    settings.debugPrint("ball " .. tostring(ballId) .. " hit edge " .. tostring(edge))
+    if edge == "bottom" then
+        settings.debugPrint("ball hit bottom edge")
+        self.gameState.currentState = PlayStateClass.SHOT_DONE
+    end
+end
+
+---Called by the physics engine when a ball hits a pin.
+---@param ballId number
+---@param pinId number
+function PlayWindow:_onPinHit(ballId, pinId)
+    local gs = self.gameState
+    if not gs then
+        error("_onPinHit(): gameState is nil")
+        return
+    end
+    if not ballId or not pinId then
+        error("_onPinHit(): param(s) nil")
+        return
+    end
+    settings.debugPrint("ball " .. tostring(ballId) .. " hit pin " .. tostring(pinId))
+    if not gs.pins[pinId] then
+        error("_onPinHit(): unknown pinId")
+        return
+    end
+
+    local pinInfo = gs.pins[pinId]
+
+    if pinInfo.class == PinClass.EFFECT then
+        local effect = gs.magicEffectsWithParams[pinInfo.magicEffectWithParamsIdx]
+        if not effect then
+            error("_onPinHit(): invalid effect " .. tostring(pinInfo.magicEffectWithParamsIdx))
+            return
+        end
+        gs.effectScores:modifyEffectScore(effect, effectPinHit)
+    elseif pinInfo.class == PinClass.ALEMBIC then
+        settings.debugPrint("TODO: Alembic effect")
+    elseif pinInfo.class == PinClass.RETORT then
+        settings.debugPrint("TODO: Retort effect")
+    elseif pinInfo.class == PinClass.CALCINATOR then
+        settings.debugPrint("TODO: Calcinator effect")
+    elseif pinInfo.class == PinClass.MORTAR then
+        -- mortar is not a pin
+    end
+
+    pinInfo.hit = true
+    if pinInfo.resilient then
+        pinInfo.resilient = false
+    else
+        settings.debugPrint("pin " .. tostring(pinId) .. " popped")
+        pinInfo.popped = true
+        gs.physics.pins[pinId].enabled = false
+    end
+end
+
+---Returns a per-frame layout closure for an EFFECT pin.
+---Closes over `self` and the static effect data; reads live state via self.gameState.
+---@param magicEffectWithParams MagicEffectWithParams
+---@return fun(dt:number, id:number): table|boolean
+function PlayWindow:_getEffectPinLayouter(magicEffectWithParams)
+    local color = const.MagickColors[magicEffectWithParams.effect.school].default
+        or magicEffectWithParams.effect.color
+    local shadeColor = const.MagickColors[magicEffectWithParams.effect.school].highlight
+        or magicEffectWithParams.effect.color
     local icon = {
         type = ui.TYPE.Image,
         props = {
             relativePosition = util.vector2(0.5, 0.5),
-            anchor = util.vector2(0.5, 0.5),
-            size = const.BallSize / 2,
-            resource = ui.texture {
-                path = magicEffectWithParams.effect.icon
-            },
+            anchor           = util.vector2(0.5, 0.5),
+            size             = const.BallSize / 2,
+            resource         = ui.texture { path = magicEffectWithParams.effect.icon },
         }
     }
+    -- Capture self so the closure doesn't rely on module-level state
+    local self = self
     return function(dt, id)
-        if not gameState then
-            return false
-        end
+        local gs = self.gameState
+        if not gs then return false end
 
-        local pinInfo = gameState.pins[id]
-        local pin = gameState.physics.pins[id]
+        local pinInfo      = gs.pins[id]
+        local pin          = gs.physics.pins[id]
         local hitThisFrame = pinInfo.hit
-        pinInfo.hit = false
+        pinInfo.hit        = false
+
         if pin and not pinInfo.popped then
             return {
-                type = ui.TYPE.Image,
-                props = {
+                type    = ui.TYPE.Image,
+                props   = {
                     position = pin.position,
-                    anchor = util.vector2(0.5, 0.5),
-                    size = const.BallSize,
+                    anchor   = util.vector2(0.5, 0.5),
+                    size     = const.BallSize,
                     resource = templates.ballTexture,
-                    color = color
+                    color    = color
                 },
                 content = ui.content {
                     icon,
                     {
-                        type = ui.TYPE.Image,
+                        type  = ui.TYPE.Image,
                         props = {
-                            anchor = util.vector2(0.5, 0.5),
+                            anchor           = util.vector2(0.5, 0.5),
                             relativePosition = util.vector2(0.5, 0.5),
-                            size = const.BallSize,
-                            resource = templates.shadeTexture,
-                            color = hitThisFrame and const.HitFlashColor or shadeColor
+                            size             = const.BallSize,
+                            resource         = templates.shadeTexture,
+                            color            = hitThisFrame and const.HitFlashColor or shadeColor
                         },
                     },
                     pinInfo.resilient and resilientShine:GetLayout(0) or {},
@@ -279,93 +314,143 @@ local function getEffectPinLayouter(magicEffectWithParams)
             }
         elseif pin and pinInfo.popped and pinInfo.popTimer > 0 then
             pinInfo.popTimer = pinInfo.popTimer - dt
-            local countDown = util.remap(pinInfo.popTimer, 0, const.PopFadeoutSeconds, 0, 1)
+            local countDown  = util.remap(pinInfo.popTimer, 0, const.PopFadeoutSeconds, 0, 1)
             return {
-                type = ui.TYPE.Image,
+                type  = ui.TYPE.Image,
                 props = {
                     position = pin.position,
-                    anchor = util.vector2(0.5, 0.5),
-                    size = const.BallSize / (2 - countDown),
+                    anchor   = util.vector2(0.5, 0.5),
+                    size     = const.BallSize / (2 - countDown),
                     resource = templates.ballTexture,
-                    color = hitThisFrame and const.HitFlashColor or color,
-                    alpha = countDown
+                    color    = hitThisFrame and const.HitFlashColor or color,
+                    alpha    = countDown
                 },
             }
         else
-            -- delete the pin from renderer
-            return false
+            return false -- remove from renderer
         end
     end
 end
 
+---Returns a per-frame layout closure for a non-EFFECT (buffer / tool) pin.
+---@return fun(dt:number, id:number): table|boolean
+function PlayWindow:_getBufferPinLayouter()
+    local self = self
+    return function(dt, id)
+        local gs = self.gameState
+        if not gs then return false end
+        local ppin = gs.physics.pins[id]
+        if ppin and not gs.pins[id].popped then
+            return {
+                type  = ui.TYPE.Image,
+                props = {
+                    position = ppin.position,
+                    anchor   = util.vector2(0.5, 0.5),
+                    size     = const.BallSize,
+                    resource = templates.bufferPinTexture,
+                },
+            }
+        else
+            return false -- remove from renderer
+        end
+    end
+end
 
--- sets the board up for a new shot
----comment
+---Returns a per-frame layout closure for a ball.
+---@param ballId number
+---@return fun(dt:number, id:number): table|boolean
+function PlayWindow:_getBallLayouter(ballId)
+    local self = self
+    return function(dt, id)
+        local gs = self.gameState
+        if not gs then return false end
+        local ball = gs.physics.balls[id]
+        if ball then
+            return {
+                type  = ui.TYPE.Image,
+                props = {
+                    position = ball.position,
+                    anchor   = util.vector2(0.5, 0.5),
+                    size     = const.BallSize,
+                    resource = templates.ballTexture,
+                },
+            }
+        else
+            return false -- remove from renderer
+        end
+    end
+end
+
+------------------------------------------------------------------------
+-- Board setup
+------------------------------------------------------------------------
+
+---Sets the board up for a new shot.
 ---@param ingredients ActualizedIngredient[]
 ---@param toolStrengths {[ToolClass]:number}
 ---@param desiredMagicEffectWithParams MagicEffectWithParams
-local function resetBoard(ingredients, toolStrengths, desiredMagicEffectWithParams)
-    settings.debugPrint("resetBoard() called")
-    board = renderBoard.new()
+function PlayWindow:_resetBoard(ingredients, toolStrengths, desiredMagicEffectWithParams)
+    settings.debugPrint("_resetBoard() called")
+    self.board = renderBoard.new()
     settings.debugPrint("finished importing render board")
 
-    gameState = {
-        -- todo: finish
-        isPotion = true,
-        ballID = 1,
-        currentState = PlayStateClass.TARGET_SELECTION,
-        effectScores = nil,
-        ingredientInfos = nil,
-        actualizedIngredients = ingredients,
-        magicEffectsWithParams = {},
+    self.gameState       = {
+        isPotion                        = true,
+        ballID                          = 1,
+        currentState                    = PlayStateClass.TARGET_SELECTION,
+        effectScores                    = nil,
+        ingredientInfos                 = nil,
+        actualizedIngredients           = ingredients,
+        magicEffectsWithParams          = {},
         desiredMagicEffectWithParamsIdx = 0,
-        -- add a little extra height so the ball can drop below
-        -- TODO: also add height above
-        physics = physics.new(const.BoardSize + util.vector2(0, 1.5 * const.BallSize.y)),
-        pins = {},
-        toolStrengths = toolStrengths,
+        physics                         = physics.new(
+            const.BoardSize + util.vector2(0, 1.5 * const.BallSize.y)
+        ),
+        pins                            = {},
+        toolStrengths                   = toolStrengths,
     }
-    gameState.physics.onEdgeHit = onEdgeHit
-    gameState.physics.onPinHit = onPinHit
 
-    gameState.ingredientInfos = ingredientInfo.new(gameState.actualizedIngredients)
+    local gs             = self.gameState
 
+    -- Wire physics callbacks through self so they carry instance state
+    gs.physics.onEdgeHit = function(ballId, edge) self:_onEdgeHit(ballId, edge) end
+    gs.physics.onPinHit  = function(ballId, pinId) self:_onPinHit(ballId, pinId) end
 
-    --- get magic effects we are dealing with
-    local recs = {}
-    for _, obj in ipairs(gameState.actualizedIngredients) do
+    gs.ingredientInfos   = ingredientInfo.new(gs.actualizedIngredients)
+
+    -- Collect magic effects from all selected ingredients
+    local recs           = {}
+    for _, obj in ipairs(gs.actualizedIngredients) do
         table.insert(recs, obj.record)
     end
-    gameState.magicEffectsWithParams = common.getMagicEffectsFromIngredients(recs)
-    local idxOfDesired = search.contains(gameState.magicEffectsWithParams, function(item)
+    gs.magicEffectsWithParams = common.getMagicEffectsFromIngredients(recs)
+
+    local idxOfDesired = search.contains(gs.magicEffectsWithParams, function(item)
         return common.magicEffectsEqual(desiredMagicEffectWithParams, item)
     end)
     if not idxOfDesired then
         error("effect not found")
     end
-    settings.debugPrint("found " .. tostring(#gameState.magicEffectsWithParams) .. " effects")
-    gameState.desiredMagicEffectWithParamsIdx = idxOfDesired
-    gameState.effectScores = effectScore.new(gameState.magicEffectsWithParams)
+    settings.debugPrint("found " .. tostring(#gs.magicEffectsWithParams) .. " effects")
+    gs.desiredMagicEffectWithParamsIdx = idxOfDesired
+    gs.effectScores = effectScore.new(gs.magicEffectsWithParams)
 
-    -- determine magic effect pin counts
-    local playerAlchemyFactor = util.remap(util.clamp(pself.type.stats.skills.alchemy(pself).modified, 0, 130), 0, 130, 1,
-        1.5)
-    -- tool strength is from 0.5 to 2
-    local replaceChance = util.remap(util.clamp(playerAlchemyFactor * toolStrengths[const.ToolClass.MORTAR], 0.5, 3), 0.5,
-        3, 0,
-        0.95)
+    -- Determine per-effect pin counts, factoring in Mortar & Pestle quality
+    local playerAlchemyFactor = util.remap(
+        util.clamp(pself.type.stats.skills.alchemy(pself).modified, 0, 130), 0, 130, 1, 1.5)
+    local replaceChance = util.remap(
+        util.clamp(playerAlchemyFactor * toolStrengths[const.ToolClass.MORTAR], 0.5, 3), 0.5, 3, 0, 0.95)
+
     ---@type {[number]:number}
     local effectPinCounts = {}
-    for idx, mewp in ipairs(gameState.magicEffectsWithParams) do
-        if idx == gameState.desiredMagicEffectWithParamsIdx then
-            -- special treatment for the desired effect
+    for idx, _ in ipairs(gs.magicEffectsWithParams) do
+        if idx == gs.desiredMagicEffectWithParamsIdx then
             effectPinCounts[idx] = math.ceil(const.PinsPerEffect * 1.5)
         else
             for _ = 1, const.PinsPerEffect, 1 do
-                --- mortar has a chance to replace undesired effects
                 if math.random() < replaceChance then
-                    effectPinCounts[gameState.desiredMagicEffectWithParamsIdx] = (effectPinCounts
-                        [gameState.desiredMagicEffectWithParamsIdx] or 0) + 1
+                    effectPinCounts[gs.desiredMagicEffectWithParamsIdx] =
+                        (effectPinCounts[gs.desiredMagicEffectWithParamsIdx] or 0) + 1
                 else
                     effectPinCounts[idx] = (effectPinCounts[idx] or 0) + 1
                 end
@@ -375,35 +460,32 @@ local function resetBoard(ingredients, toolStrengths, desiredMagicEffectWithPara
 
     ---@type {[PinClass]:number}
     local toolPinCounts = {
-        [PinClass.ALEMBIC] = math.ceil(2 * gameState.toolStrengths[const.ToolClass.ALEMBIC]),
-        [PinClass.CALCINATOR] = math.ceil(2 * gameState.toolStrengths[const.ToolClass.CALCINATOR]),
-        [PinClass.RETORT] = gameState.toolStrengths[const.ToolClass.RETORT] and 1 or 0
+        [PinClass.ALEMBIC]    = math.ceil(2 * gs.toolStrengths[const.ToolClass.ALEMBIC]),
+        [PinClass.CALCINATOR] = math.ceil(2 * gs.toolStrengths[const.ToolClass.CALCINATOR]),
+        [PinClass.RETORT]     = gs.toolStrengths[const.ToolClass.RETORT] and 1 or 0,
     }
 
-    -- get total number of pins
     local totalPins = 0
-    for _, count in pairs(effectPinCounts) do
-        totalPins = totalPins + count
-    end
-    for _, count in pairs(toolPinCounts) do
-        totalPins = totalPins + count
-    end
+    for _, count in pairs(effectPinCounts) do totalPins = totalPins + count end
+    for _, count in pairs(toolPinCounts) do totalPins = totalPins + count end
 
-    local topOffset = util.vector2(0, 0.15)
+    local topOffset          = util.vector2(0, 0.15)
     local midTopOffsetBorder = const.BoardSize:emul(util.vector2(0, topOffset.y))
     ---@type Vector2[]
-    local potentialSpots = placepins(const.BoardSize:emul(util.vector2(1, 1 - topOffset.y)), const.PinRadius, totalPins)
+    local potentialSpots     = placepins(
+        const.BoardSize:emul(util.vector2(1, 1 - topOffset.y)), const.PinRadius, totalPins)
 
-    --- Add pins!
-    local nextPinID = 100
+    local nextPinID          = 100
+    local resChance          = self:_resilientChance()
 
+    ---Adds a single pin to gameState and the renderer.
     ---@param pin GamePin
     local function addPin(pin)
         if pin.ID == 0 then
-            pin.ID = nextPinID
+            pin.ID    = nextPinID
             nextPinID = nextPinID + 1
         end
-        if gameState.pins[pin.ID] then
+        if gs.pins[pin.ID] then
             error("pin ID already taken")
         end
         local position = table.remove(potentialSpots)
@@ -411,49 +493,33 @@ local function resetBoard(ingredients, toolStrengths, desiredMagicEffectWithPara
             settings.debugPrint("no space for pin " .. tostring(pin.ID))
             return
         end
-        gameState.pins[pin.ID] = pin
-        gameState.physics:addPin(pin.ID, position + midTopOffsetBorder, 0.9, const.PinRadius)
+        gs.pins[pin.ID] = pin
+        gs.physics:addPin(pin.ID, position + midTopOffsetBorder, 0.9, const.PinRadius)
+
         if pin.class == PinClass.EFFECT then
-            local mewp = gameState.magicEffectsWithParams[pin.magicEffectWithParamsIdx]
-            board.pins:AddRenderable({
-                id = pin.ID,
-                layout = getEffectPinLayouter(mewp)
+            local mewp = gs.magicEffectsWithParams[pin.magicEffectWithParamsIdx]
+            self.board.pins:AddRenderable({
+                id     = pin.ID,
+                layout = self:_getEffectPinLayouter(mewp),
             })
         else
-            board.pins:AddRenderable({
-                id = pin.ID,
-                layout = function(dt, id)
-                    local ppin = gameState.physics.pins[id]
-                    if ppin and not gameState.pins[id].popped then
-                        return {
-                            type = ui.TYPE.Image,
-                            props = {
-                                position = ppin.position,
-                                anchor = util.vector2(0.5, 0.5),
-                                size = const.BallSize,
-                                resource = templates.bufferPinTexture,
-                            },
-                        }
-                    else
-                        -- delete the pin from renderer
-                        return false
-                    end
-                end
+            self.board.pins:AddRenderable({
+                id     = pin.ID,
+                layout = self:_getBufferPinLayouter(),
             })
         end
     end
 
-    local resChance = resilientChance()
     for idx, count in pairs(effectPinCounts) do
         for _ = 1, count, 1 do
             addPin({
-                ID = 0,
-                class = PinClass.EFFECT,
+                ID                       = 0,
+                class                    = PinClass.EFFECT,
                 magicEffectWithParamsIdx = idx,
-                hit = false,
-                popped = false,
-                popTimer = const.PopFadeoutSeconds,
-                resilient = math.random() < resChance
+                hit                      = false,
+                popped                   = false,
+                popTimer                 = const.PopFadeoutSeconds,
+                resilient                = math.random() < resChance,
             })
         end
     end
@@ -461,153 +527,149 @@ local function resetBoard(ingredients, toolStrengths, desiredMagicEffectWithPara
     for class, count in pairs(toolPinCounts) do
         for _ = 1, count, 1 do
             addPin({
-                ID = 0,
-                class = class,
-                hit = false,
-                popped = false,
-                popTimer = const.PopFadeoutSeconds,
-                resilient = math.random() < resChance
+                ID        = 0,
+                class     = class,
+                hit       = false,
+                popped    = false,
+                popTimer  = const.PopFadeoutSeconds,
+                resilient = math.random() < resChance,
             })
         end
     end
 end
 
----Spawns a ball at the top of the screen with the provided velocity vector.
----@param directionVec any
-local function shootBall(directionVec)
-    if not gameState then
-        error("gameState is nil")
+------------------------------------------------------------------------
+-- Shot mechanics
+------------------------------------------------------------------------
+
+---Spawns a ball at the top of the board with the given velocity vector.
+---@param directionVec Vector2
+function PlayWindow:_shootBall(directionVec)
+    local gs = self.gameState
+    if not gs then
+        error("_shootBall(): gameState is nil")
     end
-    if gameState.currentState ~= PlayStateClass.TARGET_SELECTION then
-        error("gameState.currentState is not Target Selection")
+    if gs.currentState ~= PlayStateClass.TARGET_SELECTION then
+        error("_shootBall(): not in TARGET_SELECTION state")
     end
-    gameState.ballID = gameState.ballID + 1
-    local ballID = gameState.ballID
-    gameState.physics:addBall(ballID, shootPosition, directionVec, 1, 1, const.BallRadius)
-    board.balls:AddRenderable({
-        id = ballID,
-        layout = function(dt, id)
-            local ball = gameState.physics.balls[id]
-            if ball then
-                return {
-                    type = ui.TYPE.Image,
-                    props = {
-                        position = ball.position,
-                        anchor = util.vector2(0.5, 0.5),
-                        size = const.BallSize,
-                        resource = templates.ballTexture,
-                    },
-                }
-            else
-                -- delete the ball from renderer
-                return false
-            end
-        end
+    gs.ballID = gs.ballID + 1
+    local ballID = gs.ballID
+    gs.physics:addBall(ballID, shootPosition, directionVec, 1, 1, const.BallRadius)
+    self.board.balls:AddRenderable({
+        id     = ballID,
+        layout = self:_getBallLayouter(ballID),
     })
 end
 
-local function targetSelection(dt)
-    -- TODO: fill out stub
-    shootBall(util.vector2(math.random(), math.random()) * 5)
-    gameState.currentState = PlayStateClass.PHYSICS_SIMULATION
-    board:onFrame(dt)
-    window:update()
+------------------------------------------------------------------------
+-- Per-state update handlers
+------------------------------------------------------------------------
+
+function PlayWindow:_targetSelection(dt)
+    -- TODO: fill out stub – for now just fire a random ball
+    self:_shootBall(util.vector2(math.random(), math.random()) * 5)
+    self.gameState.currentState = PlayStateClass.PHYSICS_SIMULATION
+    self.board:onFrame(dt)
+    self.window:update()
 end
-local function physicsSimulation(dt)
-    if not gameState then
-        error("gameState is nil")
+
+function PlayWindow:_physicsSimulation(dt)
+    if not self.gameState then
+        error("_physicsSimulation(): gameState is nil")
     end
-    gameState.physics:advanceSimulation(dt)
-    resilientShine:GetLayout(dt) -- to advance the anim
-    board:onFrame(dt)
-    window:update()
+    self.gameState.physics:advanceSimulation(dt)
+    resilientShine:GetLayout(dt) -- advance shared animation
+    self.board:onFrame(dt)
+    self.window:update()
 end
-local function shotDone(dt)
-    -- todo: finish
+
+function PlayWindow:_shotDone(dt)
     settings.debugPrint("stop alchemy")
-    -- do cleanup
-    gameState = nil
-    if board then board:reset() end
-    if window then
-        window:destroy()
-        window = nil
+    self.gameState = nil
+    if self.board then
+        self.board:reset()
+        self.board = nil
     end
-    -- TODO: send effect score results to doneCallback
-    if doneCallback then doneCallback() end
+    if self.window then
+        self.window:destroy()
+        self.window = nil
+    end
+    -- TODO: forward effect score results to doneCallback
+    if self.doneCallback then self.doneCallback() end
 end
 
----@type table
-local stateHandlers = {
-    [PlayStateClass.TARGET_SELECTION] = targetSelection,
-    [PlayStateClass.PHYSICS_SIMULATION] = physicsSimulation,
-    [PlayStateClass.SHOT_DONE] = shotDone,
-}
+------------------------------------------------------------------------
+-- Window creation
+------------------------------------------------------------------------
 
-
-local function openWindow()
-    window = ui.create({
-        layer = "Windows",
-        type = ui.TYPE.Container,
+function PlayWindow:_openWindow()
+    local gs = self.gameState
+    self.window = ui.create({
+        layer    = "Windows",
+        type     = ui.TYPE.Container,
         template = interfaces.MWUI.templates.boxTransparent,
-        props = {
-            --size = const.BoardSize + util.vector2(const.BoardSize.x, 32),
-            anchor = util.vector2(0.5, 0.5),
+        props    = {
+            anchor           = util.vector2(0.5, 0.5),
             relativePosition = util.vector2(0.5, 0.5),
-            --resource = ui.texture({ path = "black" }),
         },
-        content = ui.content {
+        content  = ui.content {
             {
-                type = ui.TYPE.Flex,
-                props = {
+                type    = ui.TYPE.Flex,
+                props   = {
                     horizontal = true,
-                    align = ui.ALIGNMENT.Center,
-                    arrange = ui.ALIGNMENT.Center,
-                    --anchor = util.vector2(0.5, 0.5),
-                    --relativePosition = util.vector2(0.5, 0.5),
+                    align      = ui.ALIGNMENT.Center,
+                    arrange    = ui.ALIGNMENT.Center,
                 },
                 content = ui.content {
-                    board.boardElement,
+                    self.board.boardElement,
                     {
-                        type = ui.TYPE.Flex,
-                        props = {
+                        type    = ui.TYPE.Flex,
+                        props   = {
                             horizontal = false,
-                            align = ui.ALIGNMENT.Center,
-                            arrange = ui.ALIGNMENT.Center,
+                            align      = ui.ALIGNMENT.Center,
+                            arrange    = ui.ALIGNMENT.Center,
                         },
                         content = ui.content {
-                            gameState.ingredientInfos.element,
-                            gameState.effectScores.element,
+                            gs.ingredientInfos.element,
+                            gs.effectScores.element,
                         },
                     },
                 },
             },
-        }
-
+        },
     })
 end
 
-local function onFrame()
-    if gameState then
-        local dt = core.getRealFrameDuration()
-        stateHandlers[gameState.currentState](dt)
-        if gameState then
-            gameState.effectScores:onFrame(dt)
-            gameState.ingredientInfos:onFrame(dt)
-        end
+------------------------------------------------------------------------
+-- Public API
+------------------------------------------------------------------------
+
+---Force-closes the window (equivalent to the old closeWindow / shotDone).
+function PlayWindow:close()
+    self:_shotDone(0)
+end
+
+---Must be called from the global onFrame handler every frame.
+function PlayWindow:onFrame()
+    if not self.gameState then return end
+    local dt = core.getRealFrameDuration()
+    local state = self.gameState.currentState
+    if state == PlayStateClass.TARGET_SELECTION then
+        self:_targetSelection(dt)
+    elseif state == PlayStateClass.PHYSICS_SIMULATION then
+        self:_physicsSimulation(dt)
+    elseif state == PlayStateClass.SHOT_DONE then
+        self:_shotDone(dt)
+    end
+    -- Post-update sub-system frames (guard: _shotDone may have cleared gameState)
+    if self.gameState then
+        self.gameState.effectScores:onFrame(dt)
+        self.gameState.ingredientInfos:onFrame(dt)
     end
 end
 
+------------------------------------------------------------------------
+-- Module export
+------------------------------------------------------------------------
 
-local function showWindow(data)
-    settings.debugPrint("start alchemy play window: " .. aux_util.deepToString(data, 3))
-
-    doneCallback = data.doneCallback
-    resetBoard(data.ingredientInfos, data.toolStrengths, data.desiredEffect)
-    openWindow()
-end
-
-return {
-    showWindow = showWindow,
-    closeWindow = shotDone,
-    onFrame = onFrame,
-}
+return PlayWindow

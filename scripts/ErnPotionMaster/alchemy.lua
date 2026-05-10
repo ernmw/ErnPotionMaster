@@ -100,10 +100,15 @@ local StateClass = {
 ---@type StateClass
 local currentState = StateClass.PLAY
 
+---@type PlayWindow?
+local play
+
 local function onStopAlchemy()
     settings.debugPrint("stop alchemy")
     -- do cleanup
-    playwindow.closeWindow()
+    if play then
+        play:close()
+    end
 
     -- forward to global to remove this script
     core.sendGlobalEvent(MOD_NAME .. 'onStopAlchemy', {
@@ -140,7 +145,7 @@ local function onInit(data)
     local desiredEffect = common.getMagicEffectsFromIngredients({ ingredientInfos[1].record })[1]
     settings.debugPrint("desired effect: " .. tostring(desiredEffect.id))
 
-    playwindow.showWindow({
+    play = playwindow.new({
         ingredientInfos = ingredientInfos,
         toolStrengths = toolStrengths,
         desiredEffect = desiredEffect,
@@ -151,8 +156,8 @@ local function onInit(data)
 end
 
 local function onFrame()
-    if currentState == StateClass.PLAY then
-        playwindow.onFrame()
+    if currentState == StateClass.PLAY and play then
+        play:onFrame()
     end
 end
 

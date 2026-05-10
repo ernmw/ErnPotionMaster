@@ -275,8 +275,6 @@ function PlayWindow:_getEffectPinLayouter(magicEffectWithParams)
             resource         = ui.texture { path = magicEffectWithParams.effect.icon },
         }
     }
-    -- Capture self so the closure doesn't rely on module-level state
-    local self = self
     return function(dt, id)
         local gs = self.gameState
         if not gs then return false end
@@ -334,7 +332,6 @@ end
 ---Returns a per-frame layout closure for a non-EFFECT (buffer / tool) pin.
 ---@return fun(dt:number, id:number): table|boolean
 function PlayWindow:_getBufferPinLayouter()
-    local self = self
     return function(dt, id)
         local gs = self.gameState
         if not gs then return false end
@@ -359,7 +356,6 @@ end
 ---@param ballId number
 ---@return fun(dt:number, id:number): table|boolean
 function PlayWindow:_getBallLayouter(ballId)
-    local self = self
     return function(dt, id)
         local gs = self.gameState
         if not gs then return false end

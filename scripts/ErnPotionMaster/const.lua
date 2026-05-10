@@ -87,19 +87,23 @@ local ToolClass = {
     MORTAR = 6,
 }
 
+local BoardSize = scaleUI(util.vector2(512, 768))
+
 return {
-    BoardSize = scaleUI(util.vector2(512, 768)),
-    PinSize = scaleUI(util.vector2(32, 32)),
-    PinRadius = scaleUI(15),
-    BallSize = scaleUI(util.vector2(32, 32)),
-    BallRadius = scaleUI(15),
-    Padding = scaleUI(4),
-    EffectScorePaneSize = scaleUI(util.vector2(256, 576)),
+    BoardSize              = BoardSize,
+    ShootPosition          = util.vector2(0.5, 0.05):emul(BoardSize),
+    ShootVelocity          = scaleUI(500),
+    PinSize                = scaleUI(util.vector2(32, 32)),
+    PinRadius              = scaleUI(15),
+    BallSize               = scaleUI(util.vector2(32, 32)),
+    BallRadius             = scaleUI(15),
+    Padding                = scaleUI(4),
+    EffectScorePaneSize    = scaleUI(util.vector2(256, 576)),
     IngredientInfoPaneSize = scaleUI(util.vector2(256, 192)),
-    MagickColors = magickColors,
-    PopFadeoutSeconds = 2,
-    HitFlashColor = util.color.hex("FFFFFF"),
-    PinsPerEffect = 4,
-    IngredientSize = scaleUI(util.vector2(32, 32)),
-    ToolClass = ToolClass,
+    MagickColors           = magickColors,
+    PopFadeoutSeconds      = 2,
+    HitFlashColor          = util.color.hex("FFFFFF"),
+    PinsPerEffect          = 4,
+    IngredientSize         = scaleUI(util.vector2(32, 32)),
+    ToolClass              = ToolClass,
 }

@@ -37,8 +37,9 @@ RenderBoard.__index = RenderBoard
 
 local MIN_UPDATE    = 1 / 63
 
+---@param events table?
 ---@return RenderBoard
-function RenderBoard.new()
+function RenderBoard.new(events)
     local self = setmetatable({}, RenderBoard)
 
     self._pinsElement = ui.create {
@@ -71,6 +72,7 @@ function RenderBoard.new()
             props = {
                 visible = true,
             },
+            events = events or {},
             content = ui.content {
                 {
                     name = "board",

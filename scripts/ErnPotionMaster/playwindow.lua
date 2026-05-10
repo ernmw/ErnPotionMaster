@@ -42,8 +42,11 @@ local ingredientInfo = require("scripts.ErnPotionMaster.ingredientinfo")
 local search         = require("scripts.ErnPotionMaster.search")
 local common         = require("scripts.ErnPotionMaster.common")
 local sprite         = require("scripts.ErnPotionMaster.render.sprite")
+local keytrack       = require("scripts.ErnEnchantersRecharge.keytrack")
+local input          = require("openmw.input")
+local async          = require("openmw.async")
+local ambient        = require("openmw.ambient")
 
-local shootPosition  = util.vector2(0.5, 0.05):emul(const.BoardSize)
 
 --[[
 Before you begin, you pick the target effect you want. You can only choose effects that are present in atleast two different ingredients available to you.
@@ -145,6 +148,7 @@ local resilientShine = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\circl
 ---@field gameState GameState?
 ---@field window table?  openmw ui element
 ---@field board table?   render board
+---@field shotAim Vector2?
 ---@field doneCallback fun(data)?
 local PlayWindow = {}
 PlayWindow.__index = PlayWindow
@@ -386,7 +390,18 @@ end
 ---@param desiredMagicEffectWithParams MagicEffectWithParams
 function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithParams)
     -- Render board
-    self.board           = renderBoard.new()
+    self.shotAim         = util.vector2(1, 0)
+    self.board           = renderBoard.new({
+        mousePress = async:callback(function(data, elem)
+            if self.gameState and self.gameState.currentState == PlayStateClass.TARGET_SELECTION then
+                if data.button == 1 then
+                    ambient.playSound("menu click")
+                    self.shotAim = (data.offset - const.ShootPosition):normalize()
+                    self:_shootBall(self.shotAim)
+                end
+            end
+        end)
+    })
 
     -- Game state
     local gs             = {
@@ -557,23 +572,45 @@ function PlayWindow:_shootBall(directionVec)
     if gs.currentState ~= PlayStateClass.TARGET_SELECTION then
         error("_shootBall(): not in TARGET_SELECTION state")
     end
+    settings.debugPrint("shooting ball: " .. tostring(directionVec))
     gs.ballID = gs.ballID + 1
     local ballID = gs.ballID
-    gs.physics:addBall(ballID, shootPosition, directionVec, 1, 1, const.BallRadius)
+    gs.physics:addBall(ballID, const.ShootPosition, directionVec * const.ShootVelocity, 1, 1, const.BallRadius)
     self.board.balls:AddRenderable({
         id     = ballID,
         layout = self:_getBallLayouter(ballID),
     })
+    gs.currentState = PlayStateClass.PHYSICS_SIMULATION
 end
+
+local stickDeadzone = 0.3
+local keys          = {
+    left  = keytrack.NewKey("left", function(dt)
+        return input.isKeyPressed(input.KEY.LeftArrow) or
+            (input.getAxisValue(input.CONTROLLER_AXIS.RightX) < -1 * stickDeadzone)
+    end),
+    right = keytrack.NewKey("right", function(dt)
+        return input.isKeyPressed(input.KEY.RightArrow) or
+            (input.getAxisValue(input.CONTROLLER_AXIS.RightX) > stickDeadzone)
+    end),
+    enter = keytrack.NewKey("enter", function(dt)
+        return input.isKeyPressed(input.KEY.Enter) or
+            (input.isControllerButtonPressed(input.CONTROLLER_BUTTON.A))
+    end),
+}
 
 ------------------------------------------------------------------------
 -- Per-state update handlers
 ------------------------------------------------------------------------
 
 function PlayWindow:_targetSelection(dt)
+    for _, inp in pairs(keys) do
+        inp:update(dt)
+    end
     -- TODO: fill out stub – for now just fire a random ball
-    self:_shootBall(util.vector2(math.random(), math.random()) * 5)
+    --[[self:_shootBall(util.vector2(math.random(), math.random()) * 5)
     self.gameState.currentState = PlayStateClass.PHYSICS_SIMULATION
+    ]]
     self.board:onFrame(dt)
     self.window:update()
 end

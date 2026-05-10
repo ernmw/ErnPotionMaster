@@ -28,7 +28,7 @@ local util                   = require("openmw.util")
 ---@field _elapsedTime number
 ---@field _elapsedLoops number
 ---@field _lastFrameIdx number
----@field GetLayout fun(self: DynamicContainer, dt : number): table? nil if loop expired
+---@field GetLayout fun(self: AnimatedImage, dt : number?): table? nil if loop expired
 
 ---@class AnimatedImageMethods
 local AnimatedImageMethods   = {}
@@ -92,13 +92,15 @@ local function NewAnimatedImage(imageAtlasPath, imageAtlasResolution, frames, fp
 end
 
 ---@param self AnimatedImage
----@param dt number
+---@param dt number?
 ---@return table? nil if loop expired
 function AnimatedImageMethods:GetLayout(dt)
     -- If we already finished all loops, stay done.
     if self._loops ~= nil and self._elapsedLoops >= self._loops then
         return nil
     end
+
+    dt = dt or 0
 
     -- Advance elapsed time, ticking forward one frame at a time so we never
     -- skip the loop-boundary accounting even on a very long dt.

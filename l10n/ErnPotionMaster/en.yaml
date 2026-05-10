@@ -8,3 +8,5 @@ debugMode_name: "Debug Mode"
 debugMode_description: "Turn on verbose logging. Please turn this on and grab the log if you are going to report an issue."
 
 effectWithParam: "{effectName}: {effectParam}"
+
+ingredient: "Ingredient"

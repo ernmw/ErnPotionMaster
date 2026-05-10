@@ -15,15 +15,40 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
+
+-- This file contains the game state, including the board.
+-- It owns and rebuilds the pachinko physics board as necessary.
+-- It owns and rebuilds the render board as necessary.
+-- It maintains a registry of balls and pins indexed by their ID,
+-- and sends this info as necessary to both the pachinko physics board and render board.
+
 local MOD_NAME     = require("scripts.ErnPotionMaster.ns")
 local const        = require("scripts.ErnPotionMaster.const")
 local ui           = require("openmw.ui")
 local util         = require("openmw.util")
-local dynamic      = require("scripts.ErnPotionMaster.render.dynamic")
-local interfaces   = require('openmw.interfaces')
-local myui         = require("scripts.ErnPotionMaster.pcp.myui")
+local pself        = require("openmw.self")
 local core         = require("openmw.core")
+local types        = require("openmw.types")
+local placepins    = require("scripts.ErnPotionMaster.placepins")
+local settings     = require("scripts.ErnPotionMaster.settings.settings")
+local physics      = require("scripts.ErnPotionMaster.physics.pachinko")
+local interfaces   = require('openmw.interfaces')
+local shuffle      = require("scripts.ErnPotionMaster.shuffle")
+local aux_util     = require('openmw_aux.util')
+local renderBoard  = require("scripts.ErnPotionMaster.render.board")
+local colorutil    = require("scripts.ErnPotionMaster.colorutil")
+local myui         = require("scripts.ErnPotionMaster.pcp.myui")
+local templates    = require("scripts.ErnPotionMaster.render.templates")
 local localization = core.l10n(MOD_NAME)
+
+---@class IngredientRecord any This is a openmw.core#IngredientRecord
+---@field name string
+---@field icon string
+---@field id string
+
+---@class IngredientInfo
+---@field record IngredientRecord
+---@field count number The running score for this effect. Persists across shots.
 
 local function deepCopy(orig)
     local orig_type = type(orig)
@@ -42,19 +67,35 @@ end
 
 local ingredientText = localization("ingredient")
 
-local function ingredientLayout(ingredientRecord, count, props)
-    local iconPath = (ingredientRecord and ingredientRecord.icon)
+
+
+---@class IngredientInfoContainer
+---@field ingredients IngredientInfo[]
+---@field element any a UI element
+---@field _dirty boolean
+---@field setIngredients fun(self: IngredientInfoContainer, ingredients : IngredientInfo[]))
+---@field ingredientLayout fun (ingredientInfo: IngredientInfo, props: table?)
+
+local IngredientInfoContainer   = {}
+IngredientInfoContainer.__index = IngredientInfoContainer
+
+---Layout for one ingredient.
+---@param ingredientInfo IngredientInfo
+---@param props any
+---@return table
+function IngredientInfoContainer.ingredientLayout(ingredientInfo, props)
+    local iconPath = (ingredientInfo.record and ingredientInfo.record.icon)
         or "textures\\ErnPotionMaster\\cross.png"
-    local displayName = (ingredientRecord and ingredientRecord.name)
+    local displayName = (ingredientInfo.record and ingredientInfo.record.name)
         or ingredientText
 
     -- Build the icon's child content conditionally
     local iconChildren = {}
-    if count and count > 0 then
+    if ingredientInfo.count and ingredientInfo.count > 0 then
         iconChildren[#iconChildren + 1] = {
             type = ui.TYPE.Text,
             props = {
-                text = tostring(count),
+                text = tostring(ingredientInfo.count),
                 textColor = const.HitFlashColor,
                 textShadow = true,
                 textAlignV = ui.ALIGNMENT.End,
@@ -111,17 +152,56 @@ local function ingredientLayout(ingredientRecord, count, props)
     }
 end
 
+function IngredientInfoContainer:_layout()
+    local contents = {}
 
+    for _, es in ipairs(self.ingredients) do
+        table.insert(contents, IngredientInfoContainer.ingredientLayout(es))
+    end
 
-return {
-    ballTexture = ui.texture {
-        path = "textures\\ErnPotionMaster\\circle-full.png"
-    },
-    bufferPinTexture = ui.texture {
-        path = "textures\\ErnPotionMaster\\circle.png"
-    },
-    shadeTexture = ui.texture {
-        path = "textures\\ErnPotionMaster\\circle-ball-shade-3.png"
-    },
-    ingredientLayout = ingredientLayout,
-}
+    return {
+        type = ui.TYPE.Flex,
+        name = "IngredientInfosColumn",
+        props = {
+            horizontal = false,
+            align = ui.ALIGNMENT.Start,
+            arrange = ui.ALIGNMENT.Start,
+            size = const.IngredientInfoPaneSize,
+            --autoSize = false,
+        },
+        content = ui.content(contents)
+    }
+end
+
+---@param initial IngredientInfo[]
+---@return IngredientInfoContainer
+function IngredientInfoContainer.new(initial)
+    local self = setmetatable({}, IngredientInfoContainer)
+
+    self.ingredients = initial
+
+    self._dirty = false
+    local layout = self:_layout()
+    settings.debugPrint(aux_util.deepToString(layout, 3))
+    self.element = ui.create(layout)
+
+    return self
+end
+
+---comment
+---@param ingredients IngredientInfo[]
+function IngredientInfoContainer:setIngredients(ingredients)
+    self._dirty = true
+    self.ingredients = ingredients
+end
+
+---@param dt number?
+function IngredientInfoContainer:onFrame(dt)
+    if self._dirty then
+        self.element.layout = self:_layout()
+        self.element:update()
+        self._dirty = false
+    end
+end
+
+return IngredientInfoContainer

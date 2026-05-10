@@ -22,26 +22,27 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -- It maintains a registry of balls and pins indexed by their ID,
 -- and sends this info as necessary to both the pachinko physics board and render board.
 
-local MOD_NAME      = require("scripts.ErnPotionMaster.ns")
-local const         = require("scripts.ErnPotionMaster.const")
-local ui            = require("openmw.ui")
-local util          = require("openmw.util")
-local pself         = require("openmw.self")
-local core          = require("openmw.core")
-local types         = require("openmw.types")
-local placepins     = require("scripts.ErnPotionMaster.placepins")
-local settings      = require("scripts.ErnPotionMaster.settings.settings")
-local physics       = require("scripts.ErnPotionMaster.physics.pachinko")
-local interfaces    = require('openmw.interfaces')
-local shuffle       = require("scripts.ErnPotionMaster.shuffle")
-local aux_util      = require('openmw_aux.util')
-local renderBoard   = require("scripts.ErnPotionMaster.render.board")
-local templates     = require("scripts.ErnPotionMaster.render.templates")
-local effectScore   = require("scripts.ErnPotionMaster.effectscore")
-local search        = require("scripts.ErnPotionMaster.search")
-local sprite        = require("scripts.ErnPotionMaster.render.sprite")
+local MOD_NAME       = require("scripts.ErnPotionMaster.ns")
+local const          = require("scripts.ErnPotionMaster.const")
+local ui             = require("openmw.ui")
+local util           = require("openmw.util")
+local pself          = require("openmw.self")
+local core           = require("openmw.core")
+local types          = require("openmw.types")
+local placepins      = require("scripts.ErnPotionMaster.placepins")
+local settings       = require("scripts.ErnPotionMaster.settings.settings")
+local physics        = require("scripts.ErnPotionMaster.physics.pachinko")
+local interfaces     = require('openmw.interfaces')
+local shuffle        = require("scripts.ErnPotionMaster.shuffle")
+local aux_util       = require('openmw_aux.util')
+local renderBoard    = require("scripts.ErnPotionMaster.render.board")
+local templates      = require("scripts.ErnPotionMaster.render.templates")
+local effectScore    = require("scripts.ErnPotionMaster.effectscore")
+local ingredientInfo = require("scripts.ErnPotionMaster.ingredientinfo")
+local search         = require("scripts.ErnPotionMaster.search")
+local sprite         = require("scripts.ErnPotionMaster.render.sprite")
 
-local shootPosition = util.vector2(0.5, 0.05):emul(const.BoardSize)
+local shootPosition  = util.vector2(0.5, 0.05):emul(const.BoardSize)
 
 --[[
 Before you begin, you pick the target effect you want. You can only choose effects that are present in atleast two different ingredients available to you.
@@ -135,6 +136,7 @@ local PinClass = {
 ---@field ballID number
 ---@field pins {number: GamePin}
 ---@field effectScores EffectScoreContainer
+---@field ingredientInfos IngredientInfoContainer
 ---@field ingredientRecords any[] all ingredients involved in this shot
 ---@field magicEffectsWithParams MagicEffectWithParams[] ingredient effects, de-duplicated and sorted
 ---@field desiredMagicEffectWithParamsIdx number idx in self.magicEffectsWithParams
@@ -387,6 +389,7 @@ local function getEffectPinLayouter(magicEffectWithParams)
     end
 end
 
+
 -- sets the board up for a new shot
 ---comment
 ---@param ingredientObjects table[]
@@ -403,6 +406,7 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
         ballID = 1,
         currentState = StateClass.TARGET_SELECTION,
         effectScores = nil,
+        ingredientInfos = nil,
         ingredientRecords = {},
         magicEffectsWithParams = {},
         desiredMagicEffectWithParamsIdx = 0,
@@ -420,6 +424,8 @@ local function resetBoard(ingredientObjects, toolStrengths, desiredMagicEffectWi
         settings.debugPrint("ingredient: " .. tostring(record.name))
         table.insert(gameState.ingredientRecords, record)
     end
+
+    gameState.ingredientInfos = ingredientInfo.new()
 
     --- get magic effects we are dealing with
     gameState.magicEffectsWithParams = getMagicEffectsFromIngredients(gameState.ingredientRecords)
@@ -662,24 +668,71 @@ local function onFrame()
     end
 end
 
+---@class ActualizedIngredient: IngredientInfo
+---@field objects table[] actual objects of this type
+
+--- finds all ingredients in the given list of inventories that pass the magic effect filter.
+---@param inventories table[]?
+---@param mewpFilter (fun(a: MagicEffectWithParams): boolean)?
+---@return ActualizedIngredient[]
+local function getAllIngredients(inventories, mewpFilter)
+    inventories = inventories or { pself.type.inventory(pself) }
+    ---@type { [string]: ActualizedIngredient}
+    local ingredientsByRecordID = {}
+    for _, inventory in ipairs(inventories) do
+        for _, item in ipairs(inventory:getAll(types.Ingredient)) do
+            local record = types.Ingredient.record(item)
+            local passed = false
+            if mewpFilter then
+                for _, mewp in ipairs(getMagicEffectsFromIngredients({ record })) do
+                    if mewpFilter(mewp) then
+                        passed = true
+                        break
+                    end
+                end
+            end
+            if passed then
+                local prev = ingredientsByRecordID[record.id] or { record = record, count = 0, objects = {} }
+                prev.count = prev.count + item.count
+                table.insert(prev.objects, item)
+                ingredientsByRecordID[record.id] = prev
+            end
+        end
+    end
+
+    --- now sort
+    local out = {}
+
+    for _, ingred in pairs(ingredientsByRecordID) do
+        local insertIndex = search.binarySearch(out, function(p)
+            return ingred.record.id > p.record.id
+        end)
+        table.insert(out, insertIndex, ingred)
+    end
+
+
+    return out
+end
+
 local function onInit(data)
     settings.debugPrint("start alchemy")
 
     -- TODO: actually do selection logic. this is just for testing
-    local ingredients = {}
-    for _, item in ipairs(shuffle(pself.type.inventory(pself):getAll(types.Ingredient))) do
-        if #ingredients >= 2 then
+    ---@type IngredientInfo[]
+    local ingredientInfos = {}
+    for _, item in ipairs(shuffle(getAllIngredients())) do
+        if #ingredientInfos >= 2 then
             break
         end
-        table.insert(ingredients, item)
+        table.insert(ingredientInfos, item)
     end
 
     local toolStrengths = getToolStrengths()
 
-    local desiredEffect = getMagicEffectsFromIngredients({ types.Ingredient.record(ingredients[1]) })[1]
+    local desiredEffect = getMagicEffectsFromIngredients({ types.Ingredient.record(ingredientInfos[1]) })[1]
     settings.debugPrint("desired effect: " .. tostring(desiredEffect.id))
 
-    resetBoard(ingredients, toolStrengths, desiredEffect)
+    resetBoard(ingredientInfos, toolStrengths, desiredEffect)
     openWindow()
 end
 

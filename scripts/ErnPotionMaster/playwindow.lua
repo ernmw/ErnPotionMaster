@@ -632,10 +632,28 @@ local keys          = {
 -- Per-state update handlers
 ------------------------------------------------------------------------
 
+---@param v Vector2
+---@param theta number
+---@return Vector2
+local function rotateClockwise(v, theta)
+    local c = math.cos(theta)
+    local s = math.sin(theta)
+    return util.vector2(
+        v.x * c + v.y * s,
+        -v.x * s + v.y * c
+    )
+end
+
 function PlayWindow:_targetSelection(dt)
-    for _, inp in pairs(keys) do
-        inp:update(dt)
+    if keys.enter.rise then
+        ambient.playSound("menu click")
+        self:_shootBall(self.shotAim)
+        return
     end
+
+    local leftRight = keys.right.analog - keys.left.analog
+    self.shotAim = rotateClockwise(self.shotAim, dt * leftRight * const.ControllerAimSensitivity):normalize()
+
     local vel = self.shotAim * const.ShootVelocity
     local points = self.gameState.physics:sampleTrajectory(const.ShootPosition, vel, 20, 18)
     self.trajectoryRenderer:setTrajectory(points)
@@ -682,6 +700,13 @@ end
 function PlayWindow:onFrame()
     if not self.gameState then return end
     local dt = core.getRealFrameDuration()
+
+
+    -- Track inputs.
+    for _, inp in pairs(keys) do
+        inp:update(dt)
+    end
+
     local state = self.gameState.currentState
     if state == PlayStateClass.TARGET_SELECTION then
         self:_targetSelection(dt)

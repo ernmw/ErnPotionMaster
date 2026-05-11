@@ -136,8 +136,8 @@ local resilientShine = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\circl
     4, 10, nil, {
         anchor = util.vector2(0.5, 0.5),
         relativePosition = util.vector2(0.5, 0.5),
-        size = const.BallSize,
-        color = util.color.hex("D4AF37"),
+        size = const.PinSize,
+        color = const.ResilientColor,
     })
 
 ------------------------------------------------------------------------
@@ -275,7 +275,7 @@ function PlayWindow:_getEffectPinLayouter(magicEffectWithParams)
         props = {
             relativePosition = util.vector2(0.5, 0.5),
             anchor           = util.vector2(0.5, 0.5),
-            size             = const.BallSize / 2,
+            size             = const.PinSize / 2,
             resource         = ui.texture { path = magicEffectWithParams.effect.icon },
         }
     }
@@ -294,7 +294,7 @@ function PlayWindow:_getEffectPinLayouter(magicEffectWithParams)
                 props   = {
                     position = pin.position,
                     anchor   = util.vector2(0.5, 0.5),
-                    size     = const.BallSize,
+                    size     = const.PinSize,
                     resource = templates.ballTexture,
                     color    = color
                 },
@@ -305,7 +305,7 @@ function PlayWindow:_getEffectPinLayouter(magicEffectWithParams)
                         props = {
                             anchor           = util.vector2(0.5, 0.5),
                             relativePosition = util.vector2(0.5, 0.5),
-                            size             = const.BallSize,
+                            size             = const.PinSize,
                             resource         = templates.shadeTexture,
                             color            = hitThisFrame and const.HitFlashColor or shadeColor
                         },
@@ -321,9 +321,83 @@ function PlayWindow:_getEffectPinLayouter(magicEffectWithParams)
                 props = {
                     position = pin.position,
                     anchor   = util.vector2(0.5, 0.5),
-                    size     = const.BallSize / (2 - countDown),
+                    size     = const.PinSize / (2 - countDown),
                     resource = templates.ballTexture,
                     color    = hitThisFrame and const.HitFlashColor or color,
+                    alpha    = countDown
+                },
+            }
+        else
+            return false -- remove from renderer
+        end
+    end
+end
+
+local function toolLayout(toolClass)
+    return {
+        type = ui.TYPE.Image,
+        props = {
+            relativePosition = util.vector2(0.5, 0.5),
+            anchor           = util.vector2(0.5, 0.5),
+            size             = const.PinSize / 2,
+            resource         = templates.toolTextures[toolClass],
+            color            = const.ToolColors.icon
+        }
+    }
+end
+
+local toolPinIconLayouts = {
+    [PinClass.ALEMBIC] = toolLayout(const.ToolClass.ALEMBIC),
+    [PinClass.RETORT] = toolLayout(const.ToolClass.RETORT),
+    [PinClass.CALCINATOR] = toolLayout(const.ToolClass.CALCINATOR)
+}
+
+---@return fun(dt:number, id:number): table|boolean
+function PlayWindow:_getToolPinLayouter()
+    return function(dt, id)
+        local gs = self.gameState
+        if not gs then return false end
+
+        local pinInfo      = gs.pins[id]
+        local pin          = gs.physics.pins[id]
+        local hitThisFrame = pinInfo.hit
+        pinInfo.hit        = false
+
+        if pin and not pinInfo.popped then
+            return {
+                type    = ui.TYPE.Image,
+                props   = {
+                    position = pin.position,
+                    anchor   = util.vector2(0.5, 0.5),
+                    size     = const.PinSize,
+                    resource = templates.ballTexture,
+                    color    = const.ToolColors.default,
+                },
+                content = ui.content {
+                    toolPinIconLayouts[pinInfo.class],
+                    {
+                        type  = ui.TYPE.Image,
+                        props = {
+                            anchor           = util.vector2(0.5, 0.5),
+                            relativePosition = util.vector2(0.5, 0.5),
+                            size             = const.PinSize,
+                            resource         = templates.shadeTexture,
+                            color            = hitThisFrame and const.HitFlashColor or const.ToolColors.highlight
+                        },
+                    },
+                }
+            }
+        elseif pin and pinInfo.popped and pinInfo.popTimer > 0 then
+            pinInfo.popTimer = pinInfo.popTimer - dt
+            local countDown  = util.remap(pinInfo.popTimer, 0, const.PopFadeoutSeconds, 0, 1)
+            return {
+                type  = ui.TYPE.Image,
+                props = {
+                    position = pin.position,
+                    anchor   = util.vector2(0.5, 0.5),
+                    size     = const.PinSize / (2 - countDown),
+                    resource = templates.ballTexture,
+                    color    = hitThisFrame and const.HitFlashColor or const.ToolColors.default,
                     alpha    = countDown
                 },
             }
@@ -357,9 +431,8 @@ function PlayWindow:_getBufferPinLayouter()
 end
 
 ---Returns a per-frame layout closure for a ball.
----@param ballId number
 ---@return fun(dt:number, id:number): table|boolean
-function PlayWindow:_getBallLayouter(ballId)
+function PlayWindow:_getBallLayouter()
     return function(dt, id)
         local gs = self.gameState
         if not gs then return false end
@@ -504,12 +577,12 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
         else
             self.board.pins:AddRenderable({
                 id     = pin.ID,
-                layout = self:_getBufferPinLayouter(),
+                layout = self:_getToolPinLayouter(),
             })
         end
     end
 
-    local function newPin(class, effectIdx)
+    local function newPin(class, effectIdx, resilient)
         return {
             ID                       = 0,
             class                    = class,
@@ -517,15 +590,15 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
             hit                      = false,
             popped                   = false,
             popTimer                 = const.PopFadeoutSeconds,
-            resilient                = math.random() < resChance,
+            resilient                = resilient,
         }
     end
 
     for idx, count in pairs(effectPinCounts) do
-        for _ = 1, count do addPin(newPin(PinClass.EFFECT, idx)) end
+        for _ = 1, count do addPin(newPin(PinClass.EFFECT, idx, math.random() < resChance)) end
     end
     for class, count in pairs(toolPinCounts) do
-        for _ = 1, count do addPin(newPin(class, nil)) end
+        for _ = 1, count do addPin(newPin(class, nil, false)) end
     end
 
     -- UI window
@@ -605,7 +678,7 @@ function PlayWindow:_shootBall(directionVec)
     gs.physics:addBall(ballID, const.ShootPosition, directionVec * const.ShootVelocity, 1, 1, const.BallRadius)
     self.board.balls:AddRenderable({
         id     = ballID,
-        layout = self:_getBallLayouter(ballID),
+        layout = self:_getBallLayouter(),
     })
     self.trajectoryRenderer:clearTrajectory()
     self.trajectoryRenderer:onFrame()

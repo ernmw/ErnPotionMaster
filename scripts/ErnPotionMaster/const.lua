@@ -78,6 +78,7 @@ end
 
 ---@enum ToolClass
 local ToolClass = {
+    --- Extra life
     ALEMBIC = 3,
     --- Reset
     RETORT = 4,
@@ -89,14 +90,22 @@ local ToolClass = {
 
 local BoardSize = scaleUI(util.vector2(512, 768))
 
+--[[
+70d6ff
+ff70a6
+ff9770
+ffd670
+e9ff70
+]]
+
 return {
     BoardSize                = BoardSize,
     ShootPosition            = util.vector2(0.5, 0.05):emul(BoardSize),
     ShootVelocity            = scaleUI(500),
     --- In radians/second
     ControllerAimSensitivity = 2,
-    PinSize                  = scaleUI(util.vector2(32, 32)),
-    PinRadius                = scaleUI(15),
+    PinSize                  = scaleUI(util.vector2(38, 38)),
+    PinRadius                = scaleUI(18),
     BallSize                 = scaleUI(util.vector2(32, 32)),
     BallRadius               = scaleUI(15),
     Padding                  = scaleUI(4),
@@ -105,7 +114,13 @@ return {
     MagickColors             = magickColors,
     PopFadeoutSeconds        = 2,
     HitFlashColor            = util.color.hex("FFFFFF"),
-    PinsPerEffect            = 4,
+    PinsPerEffect            = 6,
     IngredientSize           = scaleUI(util.vector2(32, 32)),
     ToolClass                = ToolClass,
+    ResilientColor           = util.color.hex("ffd670"),
+    ToolColors               = {
+        default = util.color.hex("ff70a6"),
+        highlight = colorutil.lerpColor(util.color.hex("ff70a6"), util.color.hex("FFFFFF"), 0.5),
+        icon = util.color.hex("080808"),
+    },
 }

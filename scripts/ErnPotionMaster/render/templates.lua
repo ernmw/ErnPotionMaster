@@ -39,5 +39,15 @@ return {
     shadeTexture = ui.texture {
         path = "textures\\ErnPotionMaster\\circle-ball-shade-3.png"
     },
-    ingredientLayout = ingredientLayout,
+    toolTextures = {
+        [const.ToolClass.CALCINATOR] = ui.texture {
+            path = "textures\\ErnPotionMaster\\group.png"
+        },
+        [const.ToolClass.ALEMBIC] = ui.texture {
+            path = "textures\\ErnPotionMaster\\plus.png"
+        },
+        [const.ToolClass.RETORT] = ui.texture {
+            path = "textures\\ErnPotionMaster\\triangle.png"
+        }
+    }
 }

@@ -66,6 +66,7 @@ local magickColorsDefault = {
     restoration = util.color.hex("6372A1"),
     conjuration = util.color.hex("7F7534"),
     illusion = util.color.hex("658665"),
+    unknown = util.color.hex("e9ff70"),
 }
 
 local magickColors        = {}

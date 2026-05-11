@@ -127,7 +127,7 @@ local function effectScoreLayout(effectScore)
     end
 
     local color = const.MagickColors[effectScore.magicEffectParams.effect.school].default or
-        effectScore.magicEffectParams.effect.color
+        const.MagickColors.unknown.default
 
     local text
     if effectScore.magicEffectParams.affectedAttribute then

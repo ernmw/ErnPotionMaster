@@ -267,9 +267,9 @@ end
 ---@return fun(dt:number, id:number): table|boolean
 function PlayWindow:_getEffectPinLayouter(magicEffectWithParams)
     local color = const.MagickColors[magicEffectWithParams.effect.school].default
-        or magicEffectWithParams.effect.color
+        or const.MagickColors.unknown.default
     local shadeColor = const.MagickColors[magicEffectWithParams.effect.school].highlight
-        or magicEffectWithParams.effect.color
+        or const.MagickColors.unknown.highlight
     local icon = {
         type = ui.TYPE.Image,
         props = {

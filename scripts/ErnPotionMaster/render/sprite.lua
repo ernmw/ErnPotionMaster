@@ -28,6 +28,7 @@ local util                   = require("openmw.util")
 ---@field _elapsedTime number
 ---@field _elapsedLoops number
 ---@field _lastFrameIdx number
+---@field _doneCallback fun()
 ---@field GetLayout fun(self: AnimatedImage, dt : number?): table? nil if loop expired
 
 ---@class AnimatedImageMethods
@@ -49,7 +50,7 @@ local function deepCopy(orig)
     return copy
 end
 
-local function NewAnimatedImage(imageAtlasPath, imageAtlasResolution, frames, fps, loops, props)
+local function NewAnimatedImage(imageAtlasPath, imageAtlasResolution, frames, fps, loops, doneCallback, props)
     local new = {
         _imageAtlasPath       = imageAtlasPath,
         _imageAtlasResolution = imageAtlasResolution, -- was missing!
@@ -59,7 +60,8 @@ local function NewAnimatedImage(imageAtlasPath, imageAtlasResolution, frames, fp
         _lastFrameIdx         = 1,
         _elapsedTime          = 0,
         _elapsedLoops         = 0,
-        _imageLayouts         = {}
+        _imageLayouts         = {},
+        _doneCallback         = doneCallback or function() end,
     }
     setmetatable(new, AnimatedImageMethods)
 
@@ -116,6 +118,9 @@ function AnimatedImageMethods:GetLayout(dt)
 
             -- Finite-loop check: if we just finished the last loop, return nil.
             if self._loops ~= nil and self._elapsedLoops >= self._loops then
+                if self._elapsedLoops == self._loops then
+                    self._doneCallback()
+                end
                 return nil
             end
         end

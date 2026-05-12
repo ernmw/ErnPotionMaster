@@ -113,9 +113,10 @@ local PinClass = {
 ---@field magicEffectWithParamsIdx number? only valid with EFFECT pin class. index in gameState.magicEffectsWithParams
 ---@field ID number
 ---@field popped boolean
----@field popTimer number time that counts down post-popping for vfx.
+-----@field popTimer number time that counts down post-popping for vfx.
 ---@field hit boolean used for vfx
 ---@field resilient boolean indicates that the pin will take two hits to pop. after being hit once, resilient is set to false
+---@field explodeAnim AnimatedImage?
 
 ---@class GameState
 ---@field currentState PlayStateClass
@@ -133,12 +134,18 @@ local PinClass = {
 -- Module-level animated image (stateless across instances, safe to share)
 local resilientShine = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\circle-sweep.png",
     util.vector2(2 * 64, 2 * 64),
-    4, 10, nil, {
+    4, 10, nil, nil, {
         anchor = util.vector2(0.5, 0.5),
         relativePosition = util.vector2(0.5, 0.5),
         size = const.PinSize,
         color = const.ResilientColor,
     })
+
+local function makeExplodeAnim(props)
+    return sprite.NewAnimatedImage("textures\\ErnPotionMaster\\blast.dds",
+        util.vector2(2 * 256, 2 * 256),
+        4, 20, 1, nil, props)
+end
 
 ------------------------------------------------------------------------
 -- PlayWindow class
@@ -313,20 +320,23 @@ function PlayWindow:_getEffectPinLayouter(magicEffectWithParams)
                     pinInfo.resilient and resilientShine:GetLayout(0) or {},
                 }
             }
-        elseif pin and pinInfo.popped and pinInfo.popTimer > 0 then
-            pinInfo.popTimer = pinInfo.popTimer - dt
-            local countDown  = util.remap(pinInfo.popTimer, 0, const.PopFadeoutSeconds, 0, 1)
-            return {
-                type  = ui.TYPE.Image,
-                props = {
-                    position = pin.position,
-                    anchor   = util.vector2(0.5, 0.5),
-                    size     = const.PinSize / (2 - countDown),
-                    resource = templates.ballTexture,
-                    color    = hitThisFrame and const.HitFlashColor or color,
-                    alpha    = countDown
-                },
-            }
+        elseif pin and pinInfo.popped and not pinInfo.explodeAnim then
+            pinInfo.explodeAnim = makeExplodeAnim({
+                anchor = util.vector2(0.5, 0.5),
+                position = pin.position,
+                size = const.PinSize * 8,
+                color = shadeColor,
+            })
+            return pinInfo.explodeAnim:GetLayout(dt)
+        elseif pin and pinInfo.explodeAnim then
+            local layout = pinInfo.explodeAnim:GetLayout(dt)
+            -- if done with anim, delete it
+            if layout == nil then
+                pinInfo.explodeAnim = nil
+                return false
+            end
+            -- continue anim
+            return layout
         else
             return false -- remove from renderer
         end
@@ -740,7 +750,7 @@ function PlayWindow:_physicsSimulation(dt)
         error("_physicsSimulation(): gameState is nil")
     end
     self.gameState.physics:advanceSimulation(dt)
-    resilientShine:GetLayout(dt) -- advance shared animation
+    resilientShine:GetLayout(dt) -- advance shared animations
     self.board:onFrame(dt)
     self.window:update()
 end

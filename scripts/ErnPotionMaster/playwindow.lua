@@ -114,6 +114,7 @@ local PinClass = {
 ---@field ID number
 ---@field popped boolean
 ---@field hit boolean used for vfx
+---@field hitLeft boolean true if ball hit it on left side. used for vfx
 ---@field resilient boolean indicates that the pin will take two hits to pop. after being hit once, resilient is set to false
 ---@field explodeAnim AnimatedImage?
 
@@ -146,8 +147,9 @@ local function makeExplodeAnim(props)
         4, 20, 1, nil, props)
 end
 
-local function makeHitAnim(props)
-    return sprite.NewAnimatedImage("textures\\ErnPotionMaster\\hit.dds",
+local function makeHitAnim(left, props)
+    return sprite.NewAnimatedImage(
+        left and "textures\\ErnPotionMaster\\hit_left.dds" or "textures\\ErnPotionMaster\\hit_right.dds",
         util.vector2(2 * 256, 2 * 256),
         4, 20, 1, nil, props)
 end
@@ -263,6 +265,7 @@ function PlayWindow:_onPinHit(ballId, pinId)
         -- mortar is not a pin
     end
 
+    pinInfo.hitLeft = gs.physics.balls[ballId].position.x < gs.physics.pins[pinId].position.x
     pinInfo.hit = true
     if pinInfo.resilient then
         pinInfo.resilient = false
@@ -303,7 +306,7 @@ function PlayWindow:_getEffectPinLayouter(magicEffectWithParams)
         if pin and not pinInfo.popped then
             -- spawn hit effect?
             if hitThisFrame and not pinInfo.explodeAnim then
-                pinInfo.explodeAnim = makeHitAnim({
+                pinInfo.explodeAnim = makeHitAnim(pinInfo.hitLeft, {
                     anchor = util.vector2(0.5, 0.5),
                     relativePosition = util.vector2(0.5, 0.5),
                     size = const.PinSize * 4,

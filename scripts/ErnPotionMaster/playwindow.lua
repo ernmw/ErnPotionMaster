@@ -113,7 +113,6 @@ local PinClass = {
 ---@field magicEffectWithParamsIdx number? only valid with EFFECT pin class. index in gameState.magicEffectsWithParams
 ---@field ID number
 ---@field popped boolean
------@field popTimer number time that counts down post-popping for vfx.
 ---@field hit boolean used for vfx
 ---@field resilient boolean indicates that the pin will take two hits to pop. after being hit once, resilient is set to false
 ---@field explodeAnim AnimatedImage?
@@ -397,20 +396,23 @@ function PlayWindow:_getToolPinLayouter()
                     },
                 }
             }
-        elseif pin and pinInfo.popped and pinInfo.popTimer > 0 then
-            pinInfo.popTimer = pinInfo.popTimer - dt
-            local countDown  = util.remap(pinInfo.popTimer, 0, const.PopFadeoutSeconds, 0, 1)
-            return {
-                type  = ui.TYPE.Image,
-                props = {
-                    position = pin.position,
-                    anchor   = util.vector2(0.5, 0.5),
-                    size     = const.PinSize / (2 - countDown),
-                    resource = templates.ballTexture,
-                    color    = hitThisFrame and const.HitFlashColor or const.ToolColors.default,
-                    alpha    = countDown
-                },
-            }
+        elseif pin and pinInfo.popped and not pinInfo.explodeAnim then
+            pinInfo.explodeAnim = makeExplodeAnim({
+                anchor = util.vector2(0.5, 0.5),
+                position = pin.position,
+                size = const.PinSize * 8,
+                color = const.ToolColors.highlight,
+            })
+            return pinInfo.explodeAnim:GetLayout(dt)
+        elseif pin and pinInfo.explodeAnim then
+            local layout = pinInfo.explodeAnim:GetLayout(dt)
+            -- if done with anim, delete it
+            if layout == nil then
+                pinInfo.explodeAnim = nil
+                return false
+            end
+            -- continue anim
+            return layout
         else
             return false -- remove from renderer
         end
@@ -599,7 +601,6 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
             magicEffectWithParamsIdx = effectIdx,
             hit                      = false,
             popped                   = false,
-            popTimer                 = const.PopFadeoutSeconds,
             resilient                = resilient,
         }
     end
@@ -741,6 +742,7 @@ function PlayWindow:_targetSelection(dt)
     local points = self.gameState.physics:sampleTrajectory(const.ShootPosition, vel, 20, 18)
     self.trajectoryRenderer:setTrajectory(points)
     self.trajectoryRenderer:onFrame(dt)
+    resilientShine:GetLayout(dt) -- advance shared animations
     self.board:onFrame(dt)
     self.window:update()
 end

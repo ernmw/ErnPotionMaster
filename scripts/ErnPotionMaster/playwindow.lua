@@ -146,6 +146,12 @@ local function makeExplodeAnim(props)
         4, 20, 1, nil, props)
 end
 
+local function makeHitAnim(props)
+    return sprite.NewAnimatedImage("textures\\ErnPotionMaster\\hit.dds",
+        util.vector2(2 * 256, 2 * 256),
+        4, 20, 1, nil, props)
+end
+
 ------------------------------------------------------------------------
 -- PlayWindow class
 ------------------------------------------------------------------------
@@ -295,28 +301,56 @@ function PlayWindow:_getEffectPinLayouter(magicEffectWithParams)
         pinInfo.hit        = false
 
         if pin and not pinInfo.popped then
+            -- spawn hit effect?
+            if hitThisFrame and not pinInfo.explodeAnim then
+                pinInfo.explodeAnim = makeHitAnim({
+                    anchor = util.vector2(0.5, 0.5),
+                    relativePosition = util.vector2(0.5, 0.5),
+                    size = const.PinSize * 4,
+                    color = color,
+                })
+            end
+            local hitLayout
+            if pinInfo.explodeAnim then
+                hitLayout = pinInfo.explodeAnim:GetLayout(dt)
+                -- if done with anim, delete it
+                if hitLayout == nil then
+                    pinInfo.explodeAnim = nil
+                end
+            end
+
             return {
-                type    = ui.TYPE.Image,
                 props   = {
                     position = pin.position,
                     anchor   = util.vector2(0.5, 0.5),
-                    size     = const.PinSize,
-                    resource = templates.ballTexture,
-                    color    = color
+                    size     = const.PinSize * 4,
                 },
                 content = ui.content {
-                    icon,
                     {
-                        type  = ui.TYPE.Image,
-                        props = {
-                            anchor           = util.vector2(0.5, 0.5),
+                        type    = ui.TYPE.Image,
+                        props   = {
                             relativePosition = util.vector2(0.5, 0.5),
+                            anchor           = util.vector2(0.5, 0.5),
                             size             = const.PinSize,
-                            resource         = templates.shadeTexture,
-                            color            = hitThisFrame and const.HitFlashColor or shadeColor
+                            resource         = templates.ballTexture,
+                            color            = color
                         },
+                        content = ui.content {
+                            icon,
+                            {
+                                type  = ui.TYPE.Image,
+                                props = {
+                                    anchor           = util.vector2(0.5, 0.5),
+                                    relativePosition = util.vector2(0.5, 0.5),
+                                    size             = const.PinSize,
+                                    resource         = templates.shadeTexture,
+                                    color            = hitThisFrame and const.HitFlashColor or shadeColor
+                                },
+                            },
+                            pinInfo.resilient and resilientShine:GetLayout(0) or {},
+                        }
                     },
-                    pinInfo.resilient and resilientShine:GetLayout(0) or {},
+                    hitLayout or {},
                 }
             }
         elseif pin and pinInfo.popped and not pinInfo.explodeAnim then

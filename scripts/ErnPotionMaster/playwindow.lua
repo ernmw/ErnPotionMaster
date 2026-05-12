@@ -265,6 +265,8 @@ function PlayWindow:_onPinHit(ballId, pinId)
         -- mortar is not a pin
     end
 
+    ambient.playSoundFile("Sound\\ErnPotionMaster\\boink.ogg")
+
     pinInfo.hitLeft = gs.physics.balls[ballId].position.x < gs.physics.pins[pinId].position.x
     pinInfo.hit = true
     if pinInfo.resilient then

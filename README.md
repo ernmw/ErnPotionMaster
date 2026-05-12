@@ -23,8 +23,19 @@ content=ErnPotionMaster.omwscripts
 - https://tornadogames.itch.io/magic-sparksattacks-for-the-devs/devlog/823492/just-posted-an-awesome-new-free-pack-of-sprites-under-cc0 (CC0)
 - https://screamingbrainstudios.itch.io/seamless-space-backgrounds (CC0)
 - https://opengameart.org/content/hit-animation-frame-by-frame
+- https://freesound.org/people/Fr%C3%A9d%C3%A9ricDubois/sounds/804920/ - metal high pitched boink by FrédéricDubois -- https://freesound.org/s/804920/ -- License: Attribution 4.0
+
 
 ### maybe...
 - https://cassala.itch.io/bubble-sprites (CC0)
 - https://ansimuz.itch.io/gothicvania-patreon-collection (CC0)
 -
+
+
+magick /home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/frames/hit_003.png -flop /home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/frames/hit_003.png
+
+
+magick /home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/frames/hit_left.png -define dds:mipmaps=0 -define dds:compression=dxt5 /home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/frames/hit_left.dds
+
+
+magick "/home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/hit.dds" -crop 256x256 +repage "/home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/hit_%03d.png"

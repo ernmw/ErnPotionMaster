@@ -20,3 +20,11 @@ content=ErnPotionMaster.omwscripts
 - https://labs.mapbox.com/maki-icons/
 - Virtual List by Greatness7 (MIT)
 - PCP myui by Qlonever (MIT)
+- https://tornadogames.itch.io/magic-sparksattacks-for-the-devs/devlog/823492/just-posted-an-awesome-new-free-pack-of-sprites-under-cc0 (CC0)
+- https://screamingbrainstudios.itch.io/seamless-space-backgrounds (CC0)
+- https://opengameart.org/content/hit-animation-frame-by-frame
+
+### maybe...
+- https://cassala.itch.io/bubble-sprites (CC0)
+- https://ansimuz.itch.io/gothicvania-patreon-collection (CC0)
+-

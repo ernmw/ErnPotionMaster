@@ -227,6 +227,35 @@ function PlayWindow:_onEdgeHit(ballId, edge)
     end
 end
 
+function PlayWindow:_register_pin_renderer(pin)
+    if pin.class == PinClass.EFFECT then
+        self.board.pins:AddRenderable({
+            layout = self:_getEffectPinLayouter(pin.ID,
+                self.gameState.magicEffectsWithParams[pin.magicEffectWithParamsIdx]),
+        })
+    else
+        self.board.pins:AddRenderable({
+            layout = self:_getToolPinLayouter(pin.ID),
+        })
+    end
+end
+
+function PlayWindow:_tool_reset()
+    local retortStrength = self.gameState.toolStrengths[PinClass.RETORT]
+    local resetChance = util.remap(util.clamp(retortStrength, 0, 2), 0, 2, 0, .6)
+    for id, pinInfo in pairs(self.gameState.pins) do
+        if pinInfo.popped and math.random() < resetChance then
+            settings.debugPrint("reset pin " .. tostring(id))
+            pinInfo.popped = false
+            pinInfo.hit = false
+            pinInfo.explodeAnim = nil
+            self.gameState.physics.pins[id].enabled = true
+            self:_register_pin_renderer(pinInfo)
+            --TODO: add some flair when the pins reset
+        end
+    end
+end
+
 ---Called by the physics engine when a ball hits a pin.
 ---@param ballId number
 ---@param pinId number
@@ -258,7 +287,8 @@ function PlayWindow:_onPinHit(ballId, pinId)
     elseif pinInfo.class == PinClass.ALEMBIC then
         settings.debugPrint("TODO: Alembic effect")
     elseif pinInfo.class == PinClass.RETORT then
-        settings.debugPrint("TODO: Retort effect")
+        settings.debugPrint("Retort effect")
+        self:_tool_reset()
     elseif pinInfo.class == PinClass.CALCINATOR then
         settings.debugPrint("TODO: Calcinator effect")
     elseif pinInfo.class == PinClass.MORTAR then
@@ -280,9 +310,10 @@ end
 
 ---Returns a per-frame layout closure for an EFFECT pin.
 ---Closes over `self` and the static effect data; reads live state via self.gameState.
+---@param pinID number
 ---@param magicEffectWithParams MagicEffectWithParams
 ---@return fun(dt:number, id:number): table|boolean
-function PlayWindow:_getEffectPinLayouter(magicEffectWithParams)
+function PlayWindow:_getEffectPinLayouter(pinID, magicEffectWithParams)
     local color = const.MagickColors[magicEffectWithParams.effect.school].default
         or const.MagickColors.unknown.default
     local shadeColor = const.MagickColors[magicEffectWithParams.effect.school].highlight
@@ -300,8 +331,8 @@ function PlayWindow:_getEffectPinLayouter(magicEffectWithParams)
         local gs = self.gameState
         if not gs then return false end
 
-        local pinInfo      = gs.pins[id]
-        local pin          = gs.physics.pins[id]
+        local pinInfo      = gs.pins[pinID]
+        local pin          = gs.physics.pins[pinID]
         local hitThisFrame = pinInfo.hit
         pinInfo.hit        = false
 
@@ -400,14 +431,15 @@ local toolPinIconLayouts = {
     [PinClass.CALCINATOR] = toolLayout(const.ToolClass.CALCINATOR)
 }
 
+---@param pinID number
 ---@return fun(dt:number, id:number): table|boolean
-function PlayWindow:_getToolPinLayouter()
+function PlayWindow:_getToolPinLayouter(pinID)
     return function(dt, id)
         local gs = self.gameState
         if not gs then return false end
 
-        local pinInfo      = gs.pins[id]
-        local pin          = gs.physics.pins[id]
+        local pinInfo      = gs.pins[pinID]
+        local pin          = gs.physics.pins[pinID]
         local hitThisFrame = pinInfo.hit
         pinInfo.hit        = false
 
@@ -482,12 +514,13 @@ function PlayWindow:_getBufferPinLayouter()
 end
 
 ---Returns a per-frame layout closure for a ball.
+---@param ballID number
 ---@return fun(dt:number, id:number): table|boolean
-function PlayWindow:_getBallLayouter()
+function PlayWindow:_getBallLayouter(ballID)
     return function(dt, id)
         local gs = self.gameState
         if not gs then return false end
-        local ball = gs.physics.balls[id]
+        local ball = gs.physics.balls[ballID]
         if ball then
             return {
                 type  = ui.TYPE.Image,
@@ -620,17 +653,7 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
         end
         gs.pins[pin.ID] = pin
         gs.physics:addPin(pin.ID, position + midTopOffsetBorder, 0.9, const.PinRadius)
-        if pin.class == PinClass.EFFECT then
-            self.board.pins:AddRenderable({
-                id     = pin.ID,
-                layout = self:_getEffectPinLayouter(gs.magicEffectsWithParams[pin.magicEffectWithParamsIdx]),
-            })
-        else
-            self.board.pins:AddRenderable({
-                id     = pin.ID,
-                layout = self:_getToolPinLayouter(),
-            })
-        end
+        self:_register_pin_renderer(pin)
     end
 
     local function newPin(class, effectIdx, resilient)
@@ -727,8 +750,7 @@ function PlayWindow:_shootBall(directionVec)
     local ballID = gs.ballID
     gs.physics:addBall(ballID, const.ShootPosition, directionVec * const.ShootVelocity, 1, 1, const.BallRadius)
     self.board.balls:AddRenderable({
-        id     = ballID,
-        layout = self:_getBallLayouter(),
+        layout = self:_getBallLayouter(ballID),
     })
     self.trajectoryRenderer:clearTrajectory()
     self.trajectoryRenderer:onFrame()

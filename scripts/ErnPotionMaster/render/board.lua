@@ -84,17 +84,9 @@ function RenderBoard.new(events)
                         {
                             template = interfaces.MWUI.templates.textNormal,
                             props = {
-                                text = "left top",
-                                relativePosition = util.vector2(0, 0),
-                                anchor = util.vector2(0, 0)
-                            }
-                        },
-                        {
-                            template = interfaces.MWUI.templates.textNormal,
-                            props = {
-                                text = "right bottom",
-                                relativePosition = util.vector2(1, 1),
-                                anchor = util.vector2(1, 1)
+                                text = "this is just a demo",
+                                relativePosition = util.vector2(0.5, 0.5),
+                                anchor = util.vector2(0.5, 0.5)
                             }
                         },
                         self._pinsElement,

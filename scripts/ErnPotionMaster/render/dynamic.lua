@@ -19,12 +19,13 @@ local ui                        = require("openmw.ui")
 local search                    = require("scripts.ErnPotionMaster.search")
 
 ---@class Renderable
----@field id number
+---@field _id number?
 ---@field layout fun(dt: number, id: number): table|nil|false
 
 ---@class DynamicContainer
 ---@field element table
 ---@field renderables Renderable[]
+---@field _nextID number
 ---@field _layoutCache table<number, table>  -- id -> last known layout
 ---@field _pendingRemove table<number, true> -- ids flagged for removal this frame
 ---@field AddRenderable fun(self: DynamicContainer, renderable: Renderable)
@@ -38,12 +39,13 @@ DynamicContainerMethods.__index = DynamicContainerMethods
 ---@param self DynamicContainer
 ---@param renderable Renderable
 function DynamicContainerMethods:AddRenderable(renderable)
-    assert(type(renderable.id) == "number", "Renderable must have numeric id")
+    renderable._id = self._nextID
+    self._nextID = self._nextID + 1
     assert(type(renderable.layout) == "function", "Renderable must have layout(dt, id)")
-    local insertIndex = search.binarySearch(self.renderables, function(p)
-        return p.id > renderable.id
-    end)
-    table.insert(self.renderables, insertIndex, renderable)
+    --[[local insertIndex = search.binarySearch(self.renderables, function(p)
+        return p._id > renderable._id
+    end)]]
+    table.insert(self.renderables, renderable)
 end
 
 ---@param element table
@@ -55,6 +57,7 @@ local function NewDynamicContainer(element, renderables)
         renderables    = {},
         _layoutCache   = {},
         _pendingRemove = {},
+        _nextID        = 1,
     }
     setmetatable(new, DynamicContainerMethods)
     for _, r in ipairs(renderables) do
@@ -81,18 +84,18 @@ function DynamicContainerMethods:Render(dt)
     -- 1. Evaluate all renderables, collect removals.
     --    Removals are deferred so we don't mutate `renderables` mid-iteration.
     for _, r in ipairs(self.renderables) do
-        local result = r.layout(dt, r.id)
+        local result = r.layout(dt, r._id)
         if result == false then
             -- Flag for removal. Evict from cache NOW so it won't appear
             -- in the content rebuild below — this is what prevents the
             -- one-frame flash.
-            if self._layoutCache[r.id] ~= nil then
-                self._layoutCache[r.id] = nil
+            if self._layoutCache[r._id] ~= nil then
+                self._layoutCache[r._id] = nil
                 dirty = true
             end
-            self._pendingRemove[r.id] = true
+            self._pendingRemove[r._id] = true
         elseif result ~= nil then
-            self._layoutCache[r.id] = result
+            self._layoutCache[r._id] = result
             dirty = true
         end
         -- nil → unchanged; skip
@@ -102,7 +105,7 @@ function DynamicContainerMethods:Render(dt)
     if next(self._pendingRemove) then
         local kept = {}
         for _, r in ipairs(self.renderables) do
-            if not self._pendingRemove[r.id] then
+            if not self._pendingRemove[r._id] then
                 kept[#kept + 1] = r
             end
         end
@@ -118,7 +121,7 @@ function DynamicContainerMethods:Render(dt)
     -- 3. Rebuild content in sorted order (renderables is kept sorted by id).
     local newContent = {}
     for _, r in ipairs(self.renderables) do
-        local layout = self._layoutCache[r.id]
+        local layout = self._layoutCache[r._id]
         if layout then
             newContent[#newContent + 1] = layout
         end

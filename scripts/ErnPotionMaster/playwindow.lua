@@ -132,7 +132,7 @@ local PinClass = {
 ---@field toolStrengths {[PinClass]:number}
 
 -- Module-level animated image (stateless across instances, safe to share)
-local resilientShine = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\circle-sweep.png",
+local resilientShine = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\circle-sweep.dds",
     util.vector2(2 * 64, 2 * 64),
     4, 10, nil, nil, {
         anchor = util.vector2(0.5, 0.5),

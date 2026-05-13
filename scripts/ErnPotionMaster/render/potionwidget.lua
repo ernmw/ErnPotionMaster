@@ -21,6 +21,7 @@ local templates               = require("scripts.ErnPotionMaster.render.template
 local myui                    = require("scripts.ErnPotionMaster.pcp.myui")
 local core                    = require("openmw.core")
 local const                   = require("scripts.ErnPotionMaster.const")
+local sprite                  = require("scripts.ErnPotionMaster.render.sprite")
 
 ---@class PotionRenderer
 ---@field _potionRecord table
@@ -54,10 +55,21 @@ local function NewPotionRenderer(potionRecord, props)
         table.insert(effectLayouts, templates.effectLayout(mewp))
     end
 
-    local new = {
+    local color    = const.MagickColors[potionRecord.effects[1].school].default
+        or const.MagickColors.unknown.default
+    local glowAnim = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\effect_36.dds",
+        util.vector2(512, 512),
+        16, 10, nil, nil, {
+            anchor = util.vector2(0.5, 0.5),
+            relativePosition = util.vector2(0.5, 0.5),
+            relativeSize = util.vector2(1, 1),
+            color = color,
+        })
+
+    local new      = {
         _potionRecord = potionRecord,
         _mewpLayouts  = effectLayouts,
-        _sparklesAnim = nil,
+        _sparklesAnim = glowAnim,
         _props        = deepCopy(props or {})
     }
     setmetatable(new, PotionRendererMethods)
@@ -76,17 +88,24 @@ function PotionRendererMethods:GetLayout(dt)
         },
         content = ui.content(
             {
-                type = ui.TYPE.Image,
+                type = ui.TYPE.Widget,
                 props = {
-                    resource = ui.texture {
-                        path = self._potionRecord.icon
-                    },
                     size = const.PotionReviewIconSize,
                 },
                 content = ui.content {
+                    {
+                        type = ui.TYPE.Image,
+                        props = {
+                            resource = ui.texture {
+                                path = self._potionRecord.icon
+                            },
+                            relativeSize = util.vector2(0.75, 0.75)
+                        },
+                    },
                     self._sparklesAnim:GetLayout(dt),
                 }
             },
+
             myui.padWidget(const.Padding, const.Padding),
             {
                 type = ui.TYPE.Text,

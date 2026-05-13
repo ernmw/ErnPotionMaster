@@ -111,13 +111,6 @@ local function barLayout(value, color, length)
     }
 end
 
-local effectIconSize = util.vector2(16, 16)
-
-local attributes = core.stats.Attribute.records
-local skills = core.stats.Skill.records
-
-
-
 ---comment
 ---@param effectScore EffectScore
 ---@return table
@@ -128,22 +121,6 @@ local function effectScoreLayout(effectScore)
 
     local color = const.MagickColors[effectScore.magicEffectParams.effect.school].default or
         const.MagickColors.unknown.default
-
-    local text
-    if effectScore.magicEffectParams.affectedAttribute then
-        text = localization("effectWithParam", {
-            effectName = effectScore.magicEffectParams.effect.name,
-            effectParam = attributes[effectScore.magicEffectParams.affectedAttribute].name
-        })
-    elseif effectScore.magicEffectParams.affectedSkill then
-        text = localization("effectWithParam", {
-            effectName = effectScore.magicEffectParams.effect.name,
-            effectParam = skills[effectScore.magicEffectParams.affectedSkill].name
-        })
-    else
-        text = effectScore.magicEffectParams.effect.name
-    end
-
     return {
         type = ui.TYPE.Flex,
         props = {
@@ -156,42 +133,7 @@ local function effectScoreLayout(effectScore)
         },
         content = ui.content {
             myui.padWidget(const.Padding, const.Padding),
-            {
-                type = ui.TYPE.Flex,
-                props = {
-                    arrange = ui.ALIGNMENT.Center,
-                    align = ui.ALIGNMENT.Center,
-                    horizontal = true,
-                    autoSize = true,
-                    --relativeSize = util.vector2(1, 0.2),
-                    --size = util.vector2(0, const.EffectScorePaneSize.y)
-                    --size = util.vector2(const.EffectScorePaneSize.x, 64),
-                    -- myui.padWidget(const.EffectScorePaneSize.x, 0)
-                },
-                content = ui.content {
-                    {
-                        type = ui.TYPE.Image,
-                        props = {
-                            resource = ui.texture {
-                                path = effectScore.magicEffectParams.effect.icon
-                            },
-                            size = effectIconSize
-                        },
-                    },
-                    myui.padWidget(const.Padding, const.Padding),
-                    {
-                        --template = interfaces.MWUI.templates.textHeader,
-                        type = ui.TYPE.Text,
-                        props = {
-                            text = text,
-                            textColor = colorutil.lerpColor(myui.interactiveTextColors.normal.default, const.HitFlashColor, util.clamp(effectScore.deltaVFX, 0, 1)),
-                            textAlignV = ui.ALIGNMENT.Center,
-                            textSize = 18,
-                            --anchor = util.vector2(0.5, 0),
-                        },
-                    },
-                },
-            },
+            templates.effectLayout(effectScore.magicEffectParams, colorutil.lerpColor(myui.interactiveTextColors.normal.default, const.HitFlashColor, util.clamp(effectScore.deltaVFX, 0, 1))),
             barLayout(effectScore.score,
                 color,
                 const.EffectScorePaneSize.x),

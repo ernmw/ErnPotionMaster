@@ -92,8 +92,6 @@ local PlayStateClass = {
     PHYSICS_SIMULATION = 4,
     --- The shot is done.
     SHOT_DONE = 5,
-    --- Retry/review potion.
-    SHOT_REVIEW = 6,
 }
 
 ---@enum PinClass

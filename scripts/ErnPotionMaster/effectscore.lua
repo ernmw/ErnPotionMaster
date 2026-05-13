@@ -53,7 +53,7 @@ local common       = require("scripts.ErnPotionMaster.common")
 ---@field score number The running score for this effect. Persists across shots.
 ---@field multiplier number The multiplier for each hit this shot. Resets between shots.
 ---@field deltaVFX number A decaying-to-zero value used for special VFX.
----@field active boolean True if this shot has effect pins (the active ingredient).
+---@field primary boolean
 
 ---comment
 ---@param value number
@@ -231,19 +231,21 @@ function EffectScoreContainer:_layout()
 end
 
 ---@param mewp MagicEffectWithParams
+---@param primary boolean
 ---@return EffectScore
-local function makeNewScore(mewp)
-    return { magicEffectParams = mewp, score = 0, multiplier = 0, deltaVFX = 0, active = false }
+local function makeNewScore(mewp, primary)
+    return { magicEffectParams = mewp, score = 0, multiplier = 0, deltaVFX = 0, primary = primary }
 end
 
 ---@param initial MagicEffectWithParams[]
+---@param idxOfDesired number
 ---@return EffectScoreContainer
-function EffectScoreContainer.new(initial)
+function EffectScoreContainer.new(initial, idxOfDesired)
     local self = setmetatable({}, EffectScoreContainer)
 
     self.scores = {}
-    for _, mewp in pairs(initial or {}) do
-        table.insert(self.scores, makeNewScore(mewp))
+    for i, mewp in pairs(initial or {}) do
+        table.insert(self.scores, makeNewScore(mewp, i == idxOfDesired))
     end
 
     self._dirty = false
@@ -289,16 +291,7 @@ function EffectScoreContainer:modifyEffectScore(magicEffectParams, modFn)
         end
     end
     if not found then
-        local newScore = modFn(makeNewScore(magicEffectParams))
-        if newScore then
-            if not newScore.magicEffectParams.effect then
-                error("newScore.magicEffectParams.effect is nil: " ..
-                    aux_util.deepToString(newScore.magicEffectParams, 4))
-            end
-            newScore.deltaVFX = 1
-            settings.debugPrint("adding new effectScore " .. aux_util.deepToString(newScore, 3))
-            table.insert(self.scores, newScore)
-        end
+        error("effect not found: " .. tostring(magicEffectParams.id))
     end
 end
 

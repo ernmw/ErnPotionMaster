@@ -92,6 +92,8 @@ local PlayStateClass = {
     PHYSICS_SIMULATION = 4,
     --- The shot is done.
     SHOT_DONE = 5,
+    --- Retry/review potion.
+    SHOT_REVIEW = 6,
 }
 
 ---@enum PinClass
@@ -600,7 +602,7 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
     if not idxOfDesired then error("effect not found") end
     settings.debugPrint("found " .. tostring(#gs.magicEffectsWithParams) .. " effects")
     gs.desiredMagicEffectWithParamsIdx = idxOfDesired
-    gs.effectScores = effectScore.new(gs.magicEffectsWithParams)
+    gs.effectScores = effectScore.new(gs.magicEffectsWithParams, idxOfDesired)
 
     -- Pin counts
     local playerAlchemyFactor = util.remap(
@@ -818,8 +820,7 @@ function PlayWindow:_physicsSimulation(dt)
     self.window:update()
 end
 
-function PlayWindow:_shotDone(dt)
-    settings.debugPrint("stop alchemy")
+function PlayWindow:close()
     self.gameState = nil
     if self.board then
         self.board:reset()
@@ -829,18 +830,33 @@ function PlayWindow:_shotDone(dt)
         self.window:destroy()
         self.window = nil
     end
+end
+
+function PlayWindow:_shotDone(dt)
+    settings.debugPrint("shot done")
+
+    local scores = {}
+    for _, mewp in ipairs(self.gameState.effectScores.scores) do
+        local floorScore = math.floor(mewp.score)
+        if floorScore > 0 then
+            table.insert(scores, {
+                effect = mewp.magicEffectParams,
+                score = floorScore,
+                primary = mewp.primary
+            })
+        end
+    end
+    settings.debugPrint("Shot scores: " .. aux_util.deepToString(scores, 3))
+
+    self:close()
+
     -- TODO: forward effect score results to doneCallback
-    if self.doneCallback then self.doneCallback() end
+    if self.doneCallback then self.doneCallback(scores) end
 end
 
 ------------------------------------------------------------------------
 -- Public API
 ------------------------------------------------------------------------
-
----Force-closes the window (equivalent to the old closeWindow / shotDone).
-function PlayWindow:close()
-    self:_shotDone(0)
-end
 
 ---Must be called from the global onFrame handler every frame.
 function PlayWindow:onFrame()

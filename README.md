@@ -24,12 +24,12 @@ content=ErnPotionMaster.omwscripts
 - https://screamingbrainstudios.itch.io/seamless-space-backgrounds (CC0)
 - https://opengameart.org/content/hit-animation-frame-by-frame
 - https://freesound.org/people/Fr%C3%A9d%C3%A9ricDubois/sounds/804920/ - metal high pitched boink by FrédéricDubois -- https://freesound.org/s/804920/ -- License: Attribution 4.0
-
+- https://kenney.nl/assets/particle-pack (CC0)
 
 ### maybe...
 - https://cassala.itch.io/bubble-sprites (CC0)
 - https://ansimuz.itch.io/gothicvania-patreon-collection (CC0)
--
+- https://opengameart.org/sites/default/files/styles/thumbnail/public/effect-prespecive-2b.png
 
 
 magick /home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/frames/hit_003.png -flop /home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/frames/hit_003.png

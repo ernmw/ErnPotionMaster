@@ -15,35 +15,96 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
+local ui                      = require("openmw.ui")
+local util                    = require("openmw.util")
+local templates               = require("scripts.ErnPotionMaster.render.templates")
+local myui                    = require("scripts.ErnPotionMaster.pcp.myui")
+local core                    = require("openmw.core")
+local const                   = require("scripts.ErnPotionMaster.const")
 
--- This file contains the game state, including the board.
--- It owns and rebuilds the pachinko physics board as necessary.
--- It owns and rebuilds the render board as necessary.
--- It maintains a registry of balls and pins indexed by their ID,
--- and sends this info as necessary to both the pachinko physics board and render board.
+---@class PotionRenderer
+---@field _potionRecord table
+---@field _props table
+---@field _mewpLayouts table[]
+---@field _sparklesAnim AnimatedImage
+---@field GetLayout fun(self: PotionRenderer, dt : number?): table
 
-local MOD_NAME       = require("scripts.ErnPotionMaster.ns")
-local const          = require("scripts.ErnPotionMaster.const")
-local ui             = require("openmw.ui")
-local util           = require("openmw.util")
-local pself          = require("openmw.self")
-local core           = require("openmw.core")
-local types          = require("openmw.types")
-local placepins      = require("scripts.ErnPotionMaster.placepins")
-local settings       = require("scripts.ErnPotionMaster.settings.settings")
-local physics        = require("scripts.ErnPotionMaster.physics.pachinko")
-local interfaces     = require('openmw.interfaces')
-local shuffle        = require("scripts.ErnPotionMaster.shuffle")
-local aux_util       = require('openmw_aux.util')
-local renderBoard    = require("scripts.ErnPotionMaster.render.board")
-local templates      = require("scripts.ErnPotionMaster.render.templates")
-local effectScore    = require("scripts.ErnPotionMaster.effectscore")
-local ingredientInfo = require("scripts.ErnPotionMaster.ingredientinfo")
-local search         = require("scripts.ErnPotionMaster.search")
-local common         = require("scripts.ErnPotionMaster.common")
-local sprite         = require("scripts.ErnPotionMaster.render.sprite")
-local keytrack       = require("scripts.ErnPotionMaster.keytrack")
-local trajectory     = require("scripts.ErnPotionMaster.render.trajectory")
-local input          = require("openmw.input")
-local async          = require("openmw.async")
-local ambient        = require("openmw.ambient")
+---@class PotionRendererMethods
+local PotionRendererMethods   = {}
+PotionRendererMethods.__index = PotionRendererMethods
+
+local function deepCopy(orig)
+    local orig_type = type(orig)
+    local copy
+    if orig_type == 'table' then
+        copy = {}
+        for orig_key, orig_value in next, orig, nil do
+            copy[deepCopy(orig_key)] = deepCopy(orig_value)
+        end
+        setmetatable(copy, deepCopy(getmetatable(orig)))
+    else -- number, string, boolean, etc
+        copy = orig
+    end
+    return copy
+end
+
+local function NewPotionRenderer(potionRecord, props)
+    local effectLayouts = {}
+    for _, mewp in pairs(potionRecord.effects) do
+        table.insert(effectLayouts, templates.effectLayout(mewp))
+    end
+
+    local new = {
+        _potionRecord = potionRecord,
+        _mewpLayouts  = effectLayouts,
+        _sparklesAnim = nil,
+        _props        = deepCopy(props or {})
+    }
+    setmetatable(new, PotionRendererMethods)
+
+    return new
+end
+
+---@param self PotionRenderer
+---@param dt number?
+---@return table? nil if loop expired
+function PotionRendererMethods:GetLayout(dt)
+    return {
+        type = ui.TYPE.Flex,
+        props = {
+            size = self._props,
+        },
+        content = ui.content(
+            {
+                type = ui.TYPE.Image,
+                props = {
+                    resource = ui.texture {
+                        path = self._potionRecord.icon
+                    },
+                    size = const.PotionReviewIconSize,
+                },
+                content = ui.content {
+                    self._sparklesAnim:GetLayout(dt),
+                }
+            },
+            myui.padWidget(const.Padding, const.Padding),
+            {
+                type = ui.TYPE.Text,
+                props = {
+                    text = self._potionRecord.name,
+                    textColor = myui.interactiveTextColors.normal.default,
+                    textAlignV = ui.ALIGNMENT.Center,
+                    textSize = 18,
+                },
+            },
+
+
+            myui.padWidget(const.Padding, const.Padding),
+            unpack(self._mewpLayouts)
+        )
+    }
+end
+
+return {
+    NewPotionRenderer = NewPotionRenderer
+}

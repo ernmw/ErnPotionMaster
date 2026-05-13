@@ -124,4 +124,5 @@ return {
         highlight = colorutil.lerpColor(util.color.hex("ff70a6"), util.color.hex("FFFFFF"), 0.5),
         icon = util.color.hex("080808"),
     },
+    PotionReviewIconSize     = scaleUI(util.vector2(64, 64)),
 }

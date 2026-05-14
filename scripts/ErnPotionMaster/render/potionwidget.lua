@@ -24,12 +24,15 @@ local const                   = require("scripts.ErnPotionMaster.const")
 local sprite                  = require("scripts.ErnPotionMaster.render.sprite")
 local settings                = require("scripts.ErnPotionMaster.settings.settings")
 local aux_util                = require('openmw_aux.util')
+local MOD_NAME                = require("scripts.ErnPotionMaster.ns")
+local localization            = core.l10n(MOD_NAME)
 
 ---@class PotionRenderer
 ---@field _potionRecord table
 ---@field _props table
 ---@field _mewpLayouts table[]
 ---@field _sparklesAnim AnimatedImage
+---@field _title string
 ---@field GetLayout fun(self: PotionRenderer, dt : number?): table
 
 ---@class PotionRendererMethods
@@ -51,7 +54,7 @@ local function deepCopy(orig)
     return copy
 end
 
-local function NewPotionRenderer(potionRecord, props)
+local function NewPotionRenderer(potionRecord, props, count)
     local effectLayouts = {}
     for _, mewp in pairs(potionRecord.effects) do
         table.insert(effectLayouts, templates.effectLayout(mewp))
@@ -60,9 +63,6 @@ local function NewPotionRenderer(potionRecord, props)
 
     -- this is an ESM3_EffectParams
     --
-    settings.debugPrint("render potion: " .. aux_util.deepToString(potionRecord.effects[1], 3))
-    settings.debugPrint(potionRecord.effects[1].effect.school)
-    settings.debugPrint("colors: " .. aux_util.deepToString(const.MagickColors, 3))
     local color    = const.MagickColors[potionRecord.effects[1].effect.school].default
         or const.MagickColors.unknown.default
     local glowAnim = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\effect_36.dds",
@@ -74,11 +74,21 @@ local function NewPotionRenderer(potionRecord, props)
             color = color,
         })
 
-    local new      = {
+    count          = count or 1
+    local name     = potionRecord.name
+    if count > 1 then
+        name = localization("itemQuantity", {
+            name = name,
+            quantity = tostring(math.ceil(count))
+        })
+    end
+
+    local new = {
         _potionRecord = potionRecord,
         _mewpLayouts  = effectLayouts,
         _sparklesAnim = glowAnim,
-        _props        = deepCopy(props or {})
+        _props        = deepCopy(props or {}),
+        _title        = name
     }
     setmetatable(new, PotionRendererMethods)
 
@@ -99,7 +109,20 @@ function PotionRendererMethods:GetLayout(dt)
                     size = const.PotionReviewIconSize,
                 },
                 content = ui.content {
+
                     self._sparklesAnim:GetLayout(dt),
+                    {
+                        type = ui.TYPE.Image,
+                        props = {
+                            resource = ui.texture {
+                                path = self._potionRecord.icon,
+                            },
+                            color = util.color.hex("000000"),
+                            anchor = util.vector2(0.5, 0.5),
+                            relativePosition = util.vector2(0.5, 0.5),
+                            relativeSize = util.vector2(1, 1)
+                        },
+                    },
                     {
                         type = ui.TYPE.Image,
                         props = {
@@ -108,7 +131,7 @@ function PotionRendererMethods:GetLayout(dt)
                             },
                             anchor = util.vector2(0.5, 0.5),
                             relativePosition = util.vector2(0.5, 0.5),
-                            relativeSize = util.vector2(1, 1)
+                            relativeSize = util.vector2(0.8, 0.8)
                         },
                     },
                 }
@@ -118,7 +141,8 @@ function PotionRendererMethods:GetLayout(dt)
             {
                 type = ui.TYPE.Text,
                 props = {
-                    text = self._potionRecord.name,
+                    -- itemQuantity: "{name} x{quantity}"
+                    text = self._title,
                     textColor = myui.interactiveTextColors.normal.default,
                     textAlignV = ui.ALIGNMENT.Center,
                     textSize = 18,

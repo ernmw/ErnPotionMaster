@@ -170,16 +170,7 @@ local function renderDoneWindow(dt)
             relativePosition = util.vector2(0.5, 0.5),
         },
         content  = ui.content {
-            {
-                name = "board",
-                type = ui.TYPE.Widget,
-                props = {
-                    size = const.BoardSize,
-                },
-                content = ui.content {
-                    doneRenderer:GetLayout(dt)
-                }
-            }
+            doneRenderer:GetLayout(dt)
         }
     }
     if not doneWindow then
@@ -199,7 +190,8 @@ local function onFrame()
             doneRenderer = potionux.NewPotionRenderer(
                 potionRecord,
                 {
-                    size = util.vector2(500, 500)
+                    size = util.vector2(500, 500),
+                    autoSize = false,
                 }
             )
         end

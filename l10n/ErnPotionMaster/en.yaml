@@ -13,6 +13,9 @@ enableCustomUIScale_description: "Turn on to scale the alchemy window separately
 customUIScale_name: "Custom UI Scale Factor"
 
 effectWithParam: "{effectName}: {effectParam}"
+minMaxWithDuration: "{min} to {max} for {duration} seconds"
+magnitudeWithDuration: "{magnitude} for {duration} seconds"
+
 ingredient: "Ingredient"
 mainEffect: "Primary Effect"
 sideEffects: "Side Effects"

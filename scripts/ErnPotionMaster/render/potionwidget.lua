@@ -55,6 +55,7 @@ local function NewPotionRenderer(potionRecord, props)
     local effectLayouts = {}
     for _, mewp in pairs(potionRecord.effects) do
         table.insert(effectLayouts, templates.effectLayout(mewp))
+        table.insert(effectLayouts, templates.effectNumbersLayout(mewp))
     end
 
     -- this is an ESM3_EffectParams

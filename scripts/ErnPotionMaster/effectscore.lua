@@ -43,10 +43,13 @@ local localization = core.l10n(MOD_NAME)
 local common       = require("scripts.ErnPotionMaster.common")
 
 ---@class MagicEffectWithParams any This is a openmw.core#MagicEffectWithParams
----@field affectedAttribute string
----@field affectedSkill string
+---@field affectedAttribute string?
+---@field affectedSkill string?
 ---@field id string
 ---@field effect table
+---@field duration number?
+---@field magnitudeMax number?
+---@field magnitudeMin number?
 
 ---@class EffectScore
 ---@field magicEffectParams MagicEffectWithParams This is a openmw.core#MagicEffectWithParams

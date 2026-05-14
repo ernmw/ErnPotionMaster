@@ -30,6 +30,40 @@ local effectIconSize = util.vector2(16, 16)
 local attributes     = core.stats.Attribute.records
 local skills         = core.stats.Skill.records
 
+---@param mewp MagicEffectWithParams
+---@param textColor Color?
+---@return table
+local function effectNumbersLayout(mewp, textColor)
+    local text
+    if mewp.magnitudeMin == mewp.magnitudeMax and mewp.magnitudeMax then
+        text = localization("magnitudeWithDuration", {
+            magnitude = mewp.magnitudeMax,
+            duration = mewp.duration or 1,
+        })
+    else
+        text = localization("minMaxWithDuration", {
+            min = mewp.magnitudeMin or 1,
+            max = mewp.magnitudeMax or 1,
+            duration = mewp.duration or 1,
+        })
+    end
+
+
+    return {
+        --template = interfaces.MWUI.templates.textHeader,
+        type = ui.TYPE.Text,
+        props = {
+            text = text,
+            textColor = textColor or myui.interactiveTextColors.normal.default,
+            textAlignV = ui.ALIGNMENT.Center,
+            textAlignH = ui.ALIGNMENT.End,
+            textSize = 18,
+            relativePosition = util.vector2(1, 0.5),
+            anchor = util.vector2(1, 0),
+        },
+    }
+end
+
 ---comment
 ---@param mewp MagicEffectWithParams
 ---@param textColor Color?
@@ -80,6 +114,7 @@ local function effectLayout(mewp, textColor)
                     text = text,
                     textColor = textColor or myui.interactiveTextColors.normal.default,
                     textAlignV = ui.ALIGNMENT.Center,
+                    textAlignH = ui.ALIGNMENT.Start,
                     textSize = 18,
                     --anchor = util.vector2(0.5, 0),
                 },
@@ -91,6 +126,7 @@ end
 
 return {
     effectLayout = effectLayout,
+    effectNumbersLayout = effectNumbersLayout,
     ballTexture = ui.texture {
         path = "textures\\ErnPotionMaster\\circle-full.png"
     },

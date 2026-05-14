@@ -50,17 +50,37 @@ local function effectNumbersLayout(mewp, textColor)
 
 
     return {
-        --template = interfaces.MWUI.templates.textHeader,
-        type = ui.TYPE.Text,
+        type = ui.TYPE.Flex,
         props = {
-            text = text,
-            textColor = textColor or myui.interactiveTextColors.normal.default,
-            textAlignV = ui.ALIGNMENT.Center,
-            textAlignH = ui.ALIGNMENT.End,
-            textSize = 18,
-            relativePosition = util.vector2(1, 0.5),
-            anchor = util.vector2(1, 0),
+            arrange = ui.ALIGNMENT.Start,
+            align = ui.ALIGNMENT.Start,
+            horizontal = true,
+            autoSize = true,
+            --relativeSize = util.vector2(1, 0.2),
+            --size = util.vector2(0, const.EffectScorePaneSize.y)
+            --size = util.vector2(const.EffectScorePaneSize.x, 64),
+            -- myui.padWidget(const.EffectScorePaneSize.x, 0)
         },
+        content = ui.content {
+            myui.padWidget(const.Padding + effectIconSize.x, const.Padding),
+            {
+                --template = interfaces.MWUI.templates.textHeader,
+                type = ui.TYPE.Text,
+                props = {
+                    text = text,
+                    textColor = textColor or myui.interactiveTextColors.normal.default,
+                    textAlignV = ui.ALIGNMENT.Center,
+                    textAlignH = ui.ALIGNMENT.Start,
+                    textSize = 18,
+                },
+                external = {
+                    grow = 1,
+                }
+            }
+        },
+        external = {
+            stretch = 1,
+        }
     }
 end
 
@@ -87,8 +107,8 @@ local function effectLayout(mewp, textColor)
     return {
         type = ui.TYPE.Flex,
         props = {
-            arrange = ui.ALIGNMENT.Center,
-            align = ui.ALIGNMENT.Center,
+            arrange = ui.ALIGNMENT.Start,
+            align = ui.ALIGNMENT.Start,
             horizontal = true,
             autoSize = true,
             --relativeSize = util.vector2(1, 0.2),
@@ -118,8 +138,14 @@ local function effectLayout(mewp, textColor)
                     textSize = 18,
                     --anchor = util.vector2(0.5, 0),
                 },
+                external = {
+                    grow = 1,
+                }
             },
         },
+        external = {
+            stretch = 1,
+        }
     }
 end
 

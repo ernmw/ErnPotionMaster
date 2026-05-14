@@ -22,6 +22,8 @@ local myui                    = require("scripts.ErnPotionMaster.pcp.myui")
 local core                    = require("openmw.core")
 local const                   = require("scripts.ErnPotionMaster.const")
 local sprite                  = require("scripts.ErnPotionMaster.render.sprite")
+local settings                = require("scripts.ErnPotionMaster.settings.settings")
+local aux_util                = require('openmw_aux.util')
 
 ---@class PotionRenderer
 ---@field _potionRecord table
@@ -55,7 +57,12 @@ local function NewPotionRenderer(potionRecord, props)
         table.insert(effectLayouts, templates.effectLayout(mewp))
     end
 
-    local color    = const.MagickColors[potionRecord.effects[1].school].default
+    -- this is an ESM3_EffectParams
+    --
+    settings.debugPrint("render potion: " .. aux_util.deepToString(potionRecord.effects[1], 3))
+    settings.debugPrint(potionRecord.effects[1].effect.school)
+    settings.debugPrint("colors: " .. aux_util.deepToString(const.MagickColors, 3))
+    local color    = const.MagickColors[potionRecord.effects[1].effect.school].default
         or const.MagickColors.unknown.default
     local glowAnim = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\effect_36.dds",
         util.vector2(512, 512),
@@ -83,26 +90,26 @@ end
 function PotionRendererMethods:GetLayout(dt)
     return {
         type = ui.TYPE.Flex,
-        props = {
-            size = self._props,
-        },
-        content = ui.content(
+        props = self._props,
+        content = ui.content {
             {
                 type = ui.TYPE.Widget,
                 props = {
                     size = const.PotionReviewIconSize,
                 },
                 content = ui.content {
+                    self._sparklesAnim:GetLayout(dt),
                     {
                         type = ui.TYPE.Image,
                         props = {
                             resource = ui.texture {
                                 path = self._potionRecord.icon
                             },
-                            relativeSize = util.vector2(0.75, 0.75)
+                            anchor = util.vector2(0.5, 0.5),
+                            relativePosition = util.vector2(0.5, 0.5),
+                            relativeSize = util.vector2(1, 1)
                         },
                     },
-                    self._sparklesAnim:GetLayout(dt),
                 }
             },
 
@@ -119,8 +126,8 @@ function PotionRendererMethods:GetLayout(dt)
 
 
             myui.padWidget(const.Padding, const.Padding),
-            unpack(self._mewpLayouts)
-        )
+            unpack(self._mewpLayouts),
+        }
     }
 end
 

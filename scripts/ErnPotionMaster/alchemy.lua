@@ -42,6 +42,7 @@ local ingredientInfo = require("scripts.ErnPotionMaster.ingredientinfo")
 local search         = require("scripts.ErnPotionMaster.search")
 local common         = require("scripts.ErnPotionMaster.common")
 local sprite         = require("scripts.ErnPotionMaster.render.sprite")
+local potionux       = require("scripts.ErnPotionMaster.render.potionwidget")
 
 local shootPosition  = util.vector2(0.5, 0.05):emul(const.BoardSize)
 
@@ -103,6 +104,10 @@ local currentState = StateClass.PLAY
 ---@type PlayWindow?
 local play
 
+---@type any?
+local doneWindow
+local doneRenderer
+
 local function onStopAlchemy()
     settings.debugPrint("stop alchemy")
     -- do cleanup
@@ -155,9 +160,51 @@ local function onInit(data)
     })
 end
 
+local function renderDoneWindow(dt)
+    local layout = {
+        layer    = "Windows",
+        type     = ui.TYPE.Container,
+        template = interfaces.MWUI.templates.boxTransparent,
+        props    = {
+            anchor           = util.vector2(0.5, 0.5),
+            relativePosition = util.vector2(0.5, 0.5),
+        },
+        content  = ui.content {
+            {
+                name = "board",
+                type = ui.TYPE.Widget,
+                props = {
+                    size = const.BoardSize,
+                },
+                content = ui.content {
+                    doneRenderer:GetLayout(dt)
+                }
+            }
+        }
+    }
+    if not doneWindow then
+        doneWindow = ui.create(layout)
+    else
+        doneWindow.layout = layout
+        doneWindow:update()
+    end
+end
+
 local function onFrame()
     if currentState == StateClass.PLAY and play then
         play:onFrame()
+    elseif currentState == StateClass.POTION_DONE_WINDOW then
+        local potionRecord = types.Potion.records["potion_skooma_01"]
+        if not doneRenderer then
+            doneRenderer = potionux.NewPotionRenderer(
+                potionRecord,
+                {
+                    size = util.vector2(500, 500)
+                }
+            )
+        end
+        local dt = core.getRealFrameDuration()
+        renderDoneWindow(dt)
     end
 end
 

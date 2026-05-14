@@ -190,8 +190,8 @@ local function onFrame()
             doneRenderer = potionux.NewPotionRenderer(
                 potionRecord,
                 {
-                    size = util.vector2(500, 500),
-                    autoSize = false,
+                    --size = util.vector2(500, 500),
+                    arrange = ui.ALIGNMENT.Center,
                 }
             )
         end

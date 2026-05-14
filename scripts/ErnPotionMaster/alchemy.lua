@@ -22,29 +22,29 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -- It maintains a registry of balls and pins indexed by their ID,
 -- and sends this info as necessary to both the pachinko physics board and render board.
 
-local MOD_NAME       = require("scripts.ErnPotionMaster.ns")
-local const          = require("scripts.ErnPotionMaster.const")
-local ui             = require("openmw.ui")
-local util           = require("openmw.util")
-local pself          = require("openmw.self")
-local core           = require("openmw.core")
-local types          = require("openmw.types")
-local placepins      = require("scripts.ErnPotionMaster.placepins")
-local settings       = require("scripts.ErnPotionMaster.settings.settings")
-local physics        = require("scripts.ErnPotionMaster.physics.pachinko")
-local interfaces     = require('openmw.interfaces')
-local shuffle        = require("scripts.ErnPotionMaster.shuffle")
-local aux_util       = require('openmw_aux.util')
-local renderBoard    = require("scripts.ErnPotionMaster.render.board")
-local templates      = require("scripts.ErnPotionMaster.render.templates")
-local effectScore    = require("scripts.ErnPotionMaster.effectscore")
-local ingredientInfo = require("scripts.ErnPotionMaster.ingredientinfo")
-local search         = require("scripts.ErnPotionMaster.search")
-local common         = require("scripts.ErnPotionMaster.common")
-local sprite         = require("scripts.ErnPotionMaster.render.sprite")
-local potionux       = require("scripts.ErnPotionMaster.render.potionwidget")
+local MOD_NAME         = require("scripts.ErnPotionMaster.ns")
+local const            = require("scripts.ErnPotionMaster.const")
+local ui               = require("openmw.ui")
+local util             = require("openmw.util")
+local pself            = require("openmw.self")
+local core             = require("openmw.core")
+local types            = require("openmw.types")
+local placepins        = require("scripts.ErnPotionMaster.placepins")
+local settings         = require("scripts.ErnPotionMaster.settings.settings")
+local physics          = require("scripts.ErnPotionMaster.physics.pachinko")
+local interfaces       = require('openmw.interfaces')
+local shuffle          = require("scripts.ErnPotionMaster.shuffle")
+local aux_util         = require('openmw_aux.util')
+local renderBoard      = require("scripts.ErnPotionMaster.render.board")
+local templates        = require("scripts.ErnPotionMaster.render.templates")
+local effectScore      = require("scripts.ErnPotionMaster.effectscore")
+local ingredientInfo   = require("scripts.ErnPotionMaster.ingredientinfo")
+local potiondonewindow = require("scripts.ErnPotionMaster.potiondonewindow")
+local search           = require("scripts.ErnPotionMaster.search")
+local common           = require("scripts.ErnPotionMaster.common")
 
-local shootPosition  = util.vector2(0.5, 0.05):emul(const.BoardSize)
+
+local shootPosition = util.vector2(0.5, 0.05):emul(const.BoardSize)
 
 --[[
 Before you begin, you pick the target effect you want. You can only choose effects that are present in atleast two different ingredients available to you.
@@ -104,15 +104,17 @@ local currentState = StateClass.PLAY
 ---@type PlayWindow?
 local play
 
----@type any?
+---@type PotionDoneWindow?
 local doneWindow
-local doneRenderer
 
 local function onStopAlchemy()
     settings.debugPrint("stop alchemy")
     -- do cleanup
     if play then
         play:close()
+    end
+    if doneWindow then
+        doneWindow:close()
     end
 
     -- forward to global to remove this script
@@ -124,79 +126,66 @@ end
 
 local function onInit(data)
     settings.debugPrint("start alchemy")
-
-    --- TODO: start up planning UI.
-    --- once that's done, start up playwindow UI.
-
-    -- TODO: actually do selection logic. this is just for testing
-    ---@type IngredientInfo[]
-    local ingredientInfos = {}
-    for _, item in ipairs(shuffle(common.getAllIngredients())) do
-        if #ingredientInfos >= 2 then
-            break
-        end
-        table.insert(ingredientInfos, item)
-        settings.debugPrint("found ingredient: " .. aux_util.deepToString(item, 3))
-    end
-
-    -- todo
-    local toolStrengths = {
-        [const.ToolClass.CALCINATOR] = 1,
-        [const.ToolClass.ALEMBIC] = 1,
-        [const.ToolClass.MORTAR] = 1,
-        [const.ToolClass.RETORT] = 1,
-    }
-
-    local desiredEffect = common.getMagicEffectsFromIngredients({ ingredientInfos[1].record })[1]
-    settings.debugPrint("desired effect: " .. tostring(desiredEffect.id))
-
-    play = playwindow.new({
-        ingredientInfos = ingredientInfos,
-        toolStrengths = toolStrengths,
-        desiredEffect = desiredEffect,
-        doneCallback = function(data)
-            currentState = StateClass.POTION_DONE_WINDOW
-        end
-    })
-end
-
-local function renderDoneWindow(dt)
-    local layout = {
-        layer    = "Windows",
-        type     = ui.TYPE.Container,
-        template = interfaces.MWUI.templates.boxTransparent,
-        props    = {
-            anchor           = util.vector2(0.5, 0.5),
-            relativePosition = util.vector2(0.5, 0.5),
-        },
-        content  = ui.content {
-            doneRenderer:GetLayout(dt)
-        }
-    }
-    if not doneWindow then
-        doneWindow = ui.create(layout)
-    else
-        doneWindow.layout = layout
-        doneWindow:update()
-    end
 end
 
 local function onFrame()
-    if currentState == StateClass.PLAY and play then
+    if currentState == StateClass.PLAY then
+        if not play then
+            --- TODO: start up planning UI.
+            --- once that's done, start up playwindow UI.
+
+            -- TODO: actually do selection logic. this is just for testing
+            ---@type IngredientInfo[]
+            local ingredientInfos = {}
+            for _, item in ipairs(shuffle(common.getAllIngredients())) do
+                if #ingredientInfos >= 2 then
+                    break
+                end
+                table.insert(ingredientInfos, item)
+                settings.debugPrint("found ingredient: " .. aux_util.deepToString(item, 3))
+            end
+
+            -- todo
+            local toolStrengths = {
+                [const.ToolClass.CALCINATOR] = 1,
+                [const.ToolClass.ALEMBIC] = 1,
+                [const.ToolClass.MORTAR] = 1,
+                [const.ToolClass.RETORT] = 1,
+            }
+
+            local desiredEffect = common.getMagicEffectsFromIngredients({ ingredientInfos[1].record })[1]
+            settings.debugPrint("desired effect: " .. tostring(desiredEffect.id))
+
+            play = playwindow.new({
+                ingredientInfos = ingredientInfos,
+                toolStrengths = toolStrengths,
+                desiredEffect = desiredEffect,
+                doneCallback = function(data)
+                    currentState = StateClass.POTION_DONE_WINDOW
+                    play = nil
+                end
+            })
+        end
         play:onFrame()
     elseif currentState == StateClass.POTION_DONE_WINDOW then
-        local potionRecord = types.Potion.records["potion_skooma_01"]
-        if not doneRenderer then
-            doneRenderer = potionux.NewPotionRenderer(
-                potionRecord,
-                {
-                    --size = util.vector2(500, 500),
-                    arrange = ui.ALIGNMENT.Center,
-                }
+        if not doneWindow then
+            doneWindow = potiondonewindow.new(
+                types.Potion.records["potion_skooma_01"],
+                1,
+                function(data)
+                    -- TOOD: finish
+                    settings.debugPrint("close alchemy window button pressed")
+                    onStopAlchemy()
+                end,
+                function(data)
+                    -- TOOD: finish
+                    settings.debugPrint("do alchemy again")
+                    currentState = StateClass.PLAY
+                    if doneWindow then doneWindow:close() end
+                end
             )
         end
-        local dt = core.getRealFrameDuration()
-        renderDoneWindow(dt)
+        doneWindow:onFrame()
     end
 end
 

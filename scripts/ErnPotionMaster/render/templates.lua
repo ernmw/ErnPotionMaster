@@ -69,7 +69,7 @@ local function effectNumbersLayout(mewp, textColor)
                 props = {
                     text = text,
                     textColor = textColor or myui.interactiveTextColors.normal.default,
-                    textAlignV = ui.ALIGNMENT.Center,
+                    textAlignV = ui.ALIGNMENT.Start,
                     textAlignH = ui.ALIGNMENT.Start,
                     textSize = 18,
                 },
@@ -133,7 +133,7 @@ local function effectLayout(mewp, textColor)
                 props = {
                     text = text,
                     textColor = textColor or myui.interactiveTextColors.normal.default,
-                    textAlignV = ui.ALIGNMENT.Center,
+                    textAlignV = ui.ALIGNMENT.Start,
                     textAlignH = ui.ALIGNMENT.Start,
                     textSize = 18,
                     --anchor = util.vector2(0.5, 0),

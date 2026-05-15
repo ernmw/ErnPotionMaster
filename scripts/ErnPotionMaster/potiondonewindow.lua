@@ -69,7 +69,7 @@ function PotionDoneWindow:_getLayout(dt)
             relativePosition = util.vector2(0.5, 0.5),
         },
         content  = ui.content {
-            self._potionRenderer:GetLayout(dt)
+            templates.addMarginLayout(self._potionRenderer:GetLayout(dt), const.Padding)
         }
     }
 end

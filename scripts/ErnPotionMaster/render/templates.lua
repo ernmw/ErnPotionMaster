@@ -149,8 +149,59 @@ local function effectLayout(mewp, textColor)
     }
 end
 
+local function addMarginLayout(inner, padding)
+    return {
+        type = ui.TYPE.Flex,
+        props = {
+            horizontal = false,
+        },
+        external = {
+            grow = 1,
+        },
+        content = ui.content {
+
+            -- top padding
+            myui.padWidget(0, padding),
+
+            -- middle row
+            {
+                type = ui.TYPE.Flex,
+                props = {
+                    horizontal = true,
+                },
+                external = {
+                    grow = 1,
+                },
+                content = ui.content {
+
+                    -- left padding
+                    myui.padWidget(padding, 0),
+
+                    -- actual content
+                    {
+                        type = ui.TYPE.Container,
+                        external = {
+                            grow = 1,
+                        },
+                        content = ui.content {
+                            inner
+                        }
+                    },
+
+                    -- right padding
+                    myui.padWidget(padding, 0),
+                }
+            },
+
+            -- bottom padding
+            myui.padWidget(0, padding),
+        }
+    }
+end
+
 
 return {
+    addMarginLayout = addMarginLayout,
     effectLayout = effectLayout,
     effectNumbersLayout = effectNumbersLayout,
     ballTexture = ui.texture {

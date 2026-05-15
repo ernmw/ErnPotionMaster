@@ -31,6 +31,7 @@ if settings.admin.disable then
 end
 
 local function startAlchemy()
+    settings.debugPrint("Start Alchemy Window")
     -- send to global so the alchemy script can be attached
     core.sendGlobalEvent(MOD_NAME .. 'onStartAlchemy', {
         player = pself,
@@ -38,6 +39,7 @@ local function startAlchemy()
 end
 
 local function stopAlchemy()
+    settings.debugPrint("Stop Alchemy Window")
     -- send to alchemy script so it can do cleanup
     pself:sendEvent(MOD_NAME .. 'onStopAlchemy', {
         player = pself,

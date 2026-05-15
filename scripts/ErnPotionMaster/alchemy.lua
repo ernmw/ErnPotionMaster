@@ -117,6 +117,9 @@ local function onStopAlchemy()
         doneWindow:close()
     end
 
+    --- TODO: actually close the "Alchemy" window so it stops triggering
+    --- the onClose handler of the window replacer somehow
+
     -- forward to global to remove this script
     core.sendGlobalEvent(MOD_NAME .. 'onStopAlchemy', {
         player = pself,
@@ -173,15 +176,18 @@ local function onFrame()
                 types.Potion.records["potion_skooma_01"],
                 1,
                 function(data)
-                    -- TOOD: finish
+                    -- TODO: finish
                     settings.debugPrint("close alchemy window button pressed")
                     onStopAlchemy()
                 end,
                 function(data)
-                    -- TOOD: finish
+                    -- TODO: finish
                     settings.debugPrint("do alchemy again")
                     currentState = StateClass.PLAY
-                    if doneWindow then doneWindow:close() end
+                    if doneWindow then
+                        doneWindow:close()
+                        doneWindow = nil
+                    end
                 end
             )
         end

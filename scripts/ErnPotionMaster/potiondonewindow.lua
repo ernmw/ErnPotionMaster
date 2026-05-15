@@ -56,42 +56,55 @@ local localization       = core.l10n(MOD_NAME)
 ---@field _potionRenderer PotionRenderer
 ---@field _closeCallback fun(data)? close the alchemy window
 ---@field _againCallback fun(data)? start up another shot with current ingredients
----@field doneButtonElement any
----@field againButtonElement any
+---@field _doneButtonElement any
+---@field _againButtonElement any
+---@field _keys table
 local PotionDoneWindow   = {}
 PotionDoneWindow.__index = PotionDoneWindow
 
 
+local function newKeys()
+    return {
+        exit  = keytrack.NewKey("exit", function(dt)
+            return input.isControllerButtonPressed(input.CONTROLLER_BUTTON.B)
+        end),
+        enter = keytrack.NewKey("enter", function(dt)
+            return input.isKeyPressed(input.KEY.Enter) or
+                (input.isControllerButtonPressed(input.CONTROLLER_BUTTON.A))
+        end),
+    }
+end
+
 function PotionDoneWindow:_updateAgainButtonElement()
     local saveFn = function()
         settings.debugPrint("again clicked")
-        -- TODO
+        self._againCallback()
     end
-    self.againButtonElement.layout = myui.createTextButton(
-        self.againButtonElement,
+    self._againButtonElement.layout = myui.createTextButton(
+        self._againButtonElement,
         localization("againButton", {}),
         "normal",
         "saveButton",
         {},
         const.ButtonSize,
         saveFn)
-    self.againButtonElement:update()
+    self._againButtonElement:update()
 end
 
 function PotionDoneWindow:_updateDoneButtonElement()
     local saveFn = function()
         settings.debugPrint("done clicked")
-        -- TODO
+        self._closeCallback()
     end
-    self.doneButtonElement.layout = myui.createTextButton(
-        self.doneButtonElement,
+    self._doneButtonElement.layout = myui.createTextButton(
+        self._doneButtonElement,
         localization("doneButton", {}),
         "normal",
         "saveButton",
         {},
         const.ButtonSize,
         saveFn)
-    self.doneButtonElement:update()
+    self._doneButtonElement:update()
 end
 
 function PotionDoneWindow:_getLayout(dt)
@@ -143,9 +156,9 @@ function PotionDoneWindow:_getLayout(dt)
                             stretch = 1,
                         },
                         content = ui.content {
-                            self.againButtonElement,
+                            self._againButtonElement,
                             myui.padWidget(const.Padding, 0),
-                            self.doneButtonElement,
+                            self._doneButtonElement,
                         }
                     }
                 }
@@ -161,7 +174,7 @@ end
 ---@return PotionDoneWindow
 function PotionDoneWindow.new(record, count, closeCallback, againCallback)
     local self = setmetatable({
-        _potionRenderer    = potionux.NewPotionRenderer(
+        _potionRenderer     = potionux.NewPotionRenderer(
             record,
             {
                 --size = util.vector2(500, 500),
@@ -169,10 +182,11 @@ function PotionDoneWindow.new(record, count, closeCallback, againCallback)
             },
             count
         ),
-        closeCallback      = closeCallback,
-        againCallback      = againCallback,
-        doneButtonElement  = ui.create {},
-        againButtonElement = ui.create {},
+        _closeCallback      = closeCallback,
+        _againCallback      = againCallback,
+        _doneButtonElement  = ui.create {},
+        _againButtonElement = ui.create {},
+        _keys               = newKeys()
     }, PotionDoneWindow)
     self:_updateAgainButtonElement()
     self:_updateDoneButtonElement()
@@ -185,10 +199,21 @@ function PotionDoneWindow:onFrame()
     if not self.window then return end
     local dt = core.getRealFrameDuration()
 
+    -- Track inputs.
+    for _, inp in pairs(self._keys) do
+        inp:update(dt)
+    end
+
     self.window.layout = self:_getLayout(dt)
     self.window:update()
 
-    -- todo: handle A/B input for retry or close
+    if self._keys.exit.fall then
+        settings.debugPrint("exit button")
+        self._closeCallback()
+    elseif self._keys.enter.fall then
+        settings.debugPrint("again button")
+        self._againCallback()
+    end
 end
 
 function PotionDoneWindow:close()

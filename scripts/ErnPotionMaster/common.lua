@@ -17,10 +17,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 
 local MOD_NAME = require("scripts.ErnPotionMaster.ns")
-local const    = require("scripts.ErnPotionMaster.const")
-local pself    = require("openmw.self")
 local types    = require("openmw.types")
-local settings = require("scripts.ErnPotionMaster.settings.settings")
 local aux_util = require('openmw_aux.util')
 local search   = require("scripts.ErnPotionMaster.search")
 
@@ -72,31 +69,32 @@ end
 ---@field objects table[] actual objects of this type
 
 --- finds all ingredients in the given list of inventories that pass the magic effect filter.
----@param inventories table[]?
+---@param inventories table[]
 ---@param mewpFilter (fun(a: MagicEffectWithParams): boolean)?
 ---@return ActualizedIngredient[]
 local function getAllIngredients(inventories, mewpFilter)
-    inventories = inventories or { pself.type.inventory(pself) }
     ---@type { [string]: ActualizedIngredient}
     local ingredientsByRecordID = {}
     for _, inventory in ipairs(inventories) do
         for _, item in ipairs(inventory:getAll(types.Ingredient)) do
-            settings.debugPrint("checking ingredient: " .. aux_util.deepToString(item, 3))
-            local record = types.Ingredient.record(item)
-            local passed = false
-            if mewpFilter then
-                for _, mewp in ipairs(getMagicEffectsFromIngredients({ record })) do
-                    if mewpFilter(mewp) then
-                        passed = true
-                        break
+            if item:isValid() then
+                print("checking ingredient: " .. aux_util.deepToString(item, 3))
+                local record = types.Ingredient.record(item)
+                local passed = false
+                if mewpFilter then
+                    for _, mewp in ipairs(getMagicEffectsFromIngredients({ record })) do
+                        if mewpFilter(mewp) then
+                            passed = true
+                            break
+                        end
                     end
                 end
-            end
-            if passed or not mewpFilter then
-                local prev = ingredientsByRecordID[record.id] or { record = record, count = 0, objects = {} }
-                prev.count = prev.count + item.count
-                table.insert(prev.objects, item)
-                ingredientsByRecordID[record.id] = prev
+                if passed or not mewpFilter then
+                    local prev = ingredientsByRecordID[record.id] or { record = record, count = 0, objects = {} }
+                    prev.count = prev.count + item.count
+                    table.insert(prev.objects, item)
+                    ingredientsByRecordID[record.id] = prev
+                end
             end
         end
     end
@@ -115,10 +113,51 @@ local function getAllIngredients(inventories, mewpFilter)
     return out
 end
 
+---@param items table[] actual objects of this type
+---@param amount number
+---@return boolean success
+---@return table[] remainingObjects
+local function decrementItems(items, amount)
+    local totalCount = 0
+
+    for _, object in ipairs(items) do
+        if object:isValid() then
+            totalCount = totalCount + object.count
+        end
+    end
+
+    if totalCount < amount then
+        return false, items
+    end
+
+    local removedCount = 0
+    local newList = {}
+
+    for _, object in ipairs(items) do
+        if object:isValid() then
+            local remainingToRemove = amount - removedCount
+
+            if remainingToRemove <= 0 then
+                table.insert(newList, object)
+            elseif object.count <= remainingToRemove then
+                removedCount = removedCount + object.count
+                -- remove whole stack
+                object:remove()
+            else
+                object:remove(remainingToRemove)
+                removedCount = removedCount + remainingToRemove
+                table.insert(newList, object)
+            end
+        end
+    end
+    print("removed " .. tostring(amount) .. " items")
+    return true, newList
+end
 
 return {
     magicEffectsEqual = magicEffectsEqual,
     magicEffectSortFn = magicEffectSortFn,
     getMagicEffectsFromIngredients = getMagicEffectsFromIngredients,
     getAllIngredients = getAllIngredients,
+    decrementItems = decrementItems,
 }

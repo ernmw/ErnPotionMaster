@@ -48,7 +48,7 @@ local localization = core.l10n(MOD_NAME)
 
 ---@class IngredientInfo
 ---@field record IngredientRecord
----@field count number The running score for this effect. Persists across shots.
+---@field count number The total amount of the ingredient
 
 local function deepCopy(orig)
     local orig_type = type(orig)

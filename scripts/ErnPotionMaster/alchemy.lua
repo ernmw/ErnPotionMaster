@@ -135,18 +135,29 @@ end
 local function onFrame()
     if currentState == StateClass.PLAY then
         if not play then
+            local batchSize = 1
             --- TODO: start up planning UI.
             --- once that's done, start up playwindow UI.
 
             -- TODO: actually do selection logic. this is just for testing
-            ---@type IngredientInfo[]
+            local inventories = { pself.type.inventory(pself) }
+            ---@type ActualizedIngredient[]
             local ingredientInfos = {}
-            for _, item in ipairs(shuffle(common.getAllIngredients())) do
+            for _, item in ipairs(shuffle(common.getAllIngredients(inventories))) do
                 if #ingredientInfos >= 2 then
                     break
                 end
                 table.insert(ingredientInfos, item)
                 settings.debugPrint("found ingredient: " .. aux_util.deepToString(item, 3))
+            end
+
+            for _, ingred in ipairs(ingredientInfos) do
+                core.sendGlobalEvent(MOD_NAME .. 'onDecrementItems', {
+                    items = ingred.objects,
+                    amount = batchSize,
+                })
+                -- force count to batchSize for rendering in play window
+                ingred.count = batchSize
             end
 
             -- todo

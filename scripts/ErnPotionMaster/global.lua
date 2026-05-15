@@ -15,8 +15,9 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
-local world = require('openmw.world')
+local world    = require('openmw.world')
 local aux_util = require('openmw_aux.util')
+local common   = require("scripts.ErnPotionMaster.common")
 
 if require("openmw.core").API_REVISION < 62 then
     error("OpenMW 0.49 or newer is required!")
@@ -38,10 +39,14 @@ local function onStopAlchemy(data)
     end
 end
 
+local function onDecrementItems(data)
+    common.decrementItems(data.items, data.amount)
+end
 
 return {
     eventHandlers = {
         [MOD_NAME .. "onStartAlchemy"] = onStartAlchemy,
         [MOD_NAME .. "onStopAlchemy"] = onStopAlchemy,
+        [MOD_NAME .. "onDecrementItems"] = onDecrementItems,
     }
 }

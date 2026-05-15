@@ -22,41 +22,77 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -- It maintains a registry of balls and pins indexed by their ID,
 -- and sends this info as necessary to both the pachinko physics board and render board.
 
-local MOD_NAME       = require("scripts.ErnPotionMaster.ns")
-local const          = require("scripts.ErnPotionMaster.const")
-local ui             = require("openmw.ui")
-local util           = require("openmw.util")
-local pself          = require("openmw.self")
-local core           = require("openmw.core")
-local types          = require("openmw.types")
-local placepins      = require("scripts.ErnPotionMaster.placepins")
-local settings       = require("scripts.ErnPotionMaster.settings.settings")
-local physics        = require("scripts.ErnPotionMaster.physics.pachinko")
-local interfaces     = require('openmw.interfaces')
-local shuffle        = require("scripts.ErnPotionMaster.shuffle")
-local aux_util       = require('openmw_aux.util')
-local renderBoard    = require("scripts.ErnPotionMaster.render.board")
-local templates      = require("scripts.ErnPotionMaster.render.templates")
-local effectScore    = require("scripts.ErnPotionMaster.effectscore")
-local ingredientInfo = require("scripts.ErnPotionMaster.ingredientinfo")
-local search         = require("scripts.ErnPotionMaster.search")
-local common         = require("scripts.ErnPotionMaster.common")
-local sprite         = require("scripts.ErnPotionMaster.render.sprite")
-local keytrack       = require("scripts.ErnPotionMaster.keytrack")
-local trajectory     = require("scripts.ErnPotionMaster.render.trajectory")
-local input          = require("openmw.input")
-local async          = require("openmw.async")
-local ambient        = require("openmw.ambient")
-local potionux       = require("scripts.ErnPotionMaster.render.potionwidget")
-
+local MOD_NAME           = require("scripts.ErnPotionMaster.ns")
+local const              = require("scripts.ErnPotionMaster.const")
+local ui                 = require("openmw.ui")
+local util               = require("openmw.util")
+local pself              = require("openmw.self")
+local core               = require("openmw.core")
+local types              = require("openmw.types")
+local placepins          = require("scripts.ErnPotionMaster.placepins")
+local settings           = require("scripts.ErnPotionMaster.settings.settings")
+local physics            = require("scripts.ErnPotionMaster.physics.pachinko")
+local interfaces         = require('openmw.interfaces')
+local shuffle            = require("scripts.ErnPotionMaster.shuffle")
+local aux_util           = require('openmw_aux.util')
+local renderBoard        = require("scripts.ErnPotionMaster.render.board")
+local templates          = require("scripts.ErnPotionMaster.render.templates")
+local effectScore        = require("scripts.ErnPotionMaster.effectscore")
+local ingredientInfo     = require("scripts.ErnPotionMaster.ingredientinfo")
+local search             = require("scripts.ErnPotionMaster.search")
+local common             = require("scripts.ErnPotionMaster.common")
+local sprite             = require("scripts.ErnPotionMaster.render.sprite")
+local keytrack           = require("scripts.ErnPotionMaster.keytrack")
+local myui               = require("scripts.ErnPotionMaster.pcp.myui")
+local trajectory         = require("scripts.ErnPotionMaster.render.trajectory")
+local input              = require("openmw.input")
+local async              = require("openmw.async")
+local ambient            = require("openmw.ambient")
+local potionux           = require("scripts.ErnPotionMaster.render.potionwidget")
+local localization       = core.l10n(MOD_NAME)
 
 ---@class PotionDoneWindow
 ---@field window table  openmw ui element
 ---@field _potionRenderer PotionRenderer
 ---@field _closeCallback fun(data)? close the alchemy window
 ---@field _againCallback fun(data)? start up another shot with current ingredients
-local PotionDoneWindow = {}
+---@field doneButtonElement any
+---@field againButtonElement any
+local PotionDoneWindow   = {}
 PotionDoneWindow.__index = PotionDoneWindow
+
+
+function PotionDoneWindow:_updateAgainButtonElement()
+    local saveFn = function()
+        settings.debugPrint("again clicked")
+        -- TODO
+    end
+    self.againButtonElement.layout = myui.createTextButton(
+        self.againButtonElement,
+        localization("againButton", {}),
+        "normal",
+        "saveButton",
+        {},
+        const.ButtonSize,
+        saveFn)
+    self.againButtonElement:update()
+end
+
+function PotionDoneWindow:_updateDoneButtonElement()
+    local saveFn = function()
+        settings.debugPrint("done clicked")
+        -- TODO
+    end
+    self.doneButtonElement.layout = myui.createTextButton(
+        self.doneButtonElement,
+        localization("doneButton", {}),
+        "normal",
+        "saveButton",
+        {},
+        const.ButtonSize,
+        saveFn)
+    self.doneButtonElement:update()
+end
 
 function PotionDoneWindow:_getLayout(dt)
     --- TODO: add buttons for retry/close
@@ -81,7 +117,7 @@ end
 ---@return PotionDoneWindow
 function PotionDoneWindow.new(record, count, closeCallback, againCallback)
     local self = setmetatable({
-        _potionRenderer = potionux.NewPotionRenderer(
+        _potionRenderer    = potionux.NewPotionRenderer(
             record,
             {
                 --size = util.vector2(500, 500),
@@ -89,9 +125,13 @@ function PotionDoneWindow.new(record, count, closeCallback, againCallback)
             },
             count
         ),
-        closeCallback   = closeCallback,
-        againCallback   = againCallback,
+        closeCallback      = closeCallback,
+        againCallback      = againCallback,
+        doneButtonElement  = ui.create {},
+        againButtonElement = ui.create {},
     }, PotionDoneWindow)
+    self:_updateAgainButtonElement()
+    self:_updateDoneButtonElement()
     self.window = ui.create(self._potionRenderer)
     return self
 end

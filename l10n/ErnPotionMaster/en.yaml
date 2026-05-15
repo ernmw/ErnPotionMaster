@@ -16,6 +16,13 @@ effectWithParam: "{effectName}: {effectParam}"
 minMaxWithDuration: "{min} to {max} for {duration} seconds"
 magnitudeWithDuration: "{magnitude} for {duration} seconds"
 
+itemQuantity: "{name} x{quantity}"
+
+brewButton: "Brew"
+doneButton: "Done"
+againButton: "Again"
+cancelButton: "Cancel"
+
 ingredient: "Ingredient"
 mainEffect: "Primary Effect"
 sideEffects: "Side Effects"

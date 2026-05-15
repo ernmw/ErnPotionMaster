@@ -125,4 +125,5 @@ return {
         icon = util.color.hex("080808"),
     },
     PotionReviewIconSize     = scaleUI(util.vector2(64, 64)),
+    ButtonSize               = util.vector2(80, 24),
 }

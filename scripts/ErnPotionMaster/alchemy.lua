@@ -86,16 +86,12 @@ local playwindow = require("scripts.ErnPotionMaster.playwindow")
 
 ---@enum StateClass
 local StateClass = {
-    PRIMARY_EFFECT_SELECTION = 1,
-    INGREDIENT_1_SELECTION = 2,
-    INGREDIENT_2_SELECTION = 3,
-    --- let people do 5x at a time. they end up with 5 identical potions (or failures)
-    BATCH_AMOUNT_SELECTION = 4,
+    SELECTION_WINDOW = 1,
     --- the playwindow takes over in this state
-    PLAY = 5,
+    PLAY = 2,
     --- Allow for a quick "do it again" button that sets up the PLAY state
     --- again with the same ingredients, if they are available.
-    POTION_DONE_WINDOW = 6,
+    POTION_DONE_WINDOW = 3,
 }
 
 ---@type StateClass

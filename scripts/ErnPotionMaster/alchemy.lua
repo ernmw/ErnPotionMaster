@@ -101,6 +101,8 @@ local StateClass = {
 ---@type StateClass
 local currentState = StateClass.PLAY
 
+local batchSize = 3
+
 ---@type PlayWindow?
 local play
 
@@ -135,7 +137,6 @@ end
 local function onFrame()
     if currentState == StateClass.PLAY then
         if not play then
-            local batchSize = 1
             --- TODO: start up planning UI.
             --- once that's done, start up playwindow UI.
 
@@ -147,8 +148,10 @@ local function onFrame()
                 if #ingredientInfos >= 2 then
                     break
                 end
-                table.insert(ingredientInfos, item)
-                settings.debugPrint("found ingredient: " .. aux_util.deepToString(item, 3))
+                if item.count >= batchSize then
+                    table.insert(ingredientInfos, item)
+                    settings.debugPrint("found ingredient: " .. aux_util.deepToString(item, 3))
+                end
             end
 
             for _, ingred in ipairs(ingredientInfos) do
@@ -186,7 +189,7 @@ local function onFrame()
         if not doneWindow then
             doneWindow = potiondonewindow.new(
                 types.Potion.records["potion_skooma_01"],
-                1,
+                batchSize,
                 function(data)
                     -- TODO: finish
                     settings.debugPrint("close alchemy window button pressed")

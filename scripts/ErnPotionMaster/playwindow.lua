@@ -122,6 +122,7 @@ local PinClass = {
 ---@field currentState PlayStateClass
 ---@field isPotion boolean true if a beneficial potion, false if a poison
 ---@field ballID number
+---@field batchSize number
 ---@field pins {number: GamePin}
 ---@field effectScores EffectScoreContainer
 ---@field ingredientInfos IngredientInfoContainer
@@ -274,6 +275,8 @@ function PlayWindow:_onPinHit(ballId, pinId)
         error("_onPinHit(): unknown pinId")
         return
     end
+
+    --- TODO: get +1 batch Size if you get a board clear or something?
 
     local pinInfo = gs.pins[pinId]
 
@@ -569,8 +572,15 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
     })
     self.trajectoryRenderer = trajectory.new(const.BoardSize)
 
+
+    -- find batch size
+    local batchSize = 1000
+    for _, ingred in ipairs(ingredients) do
+        batchSize = math.min(batchSize, ingred.count)
+    end
+
     -- Game state
-    local gs                = {
+    local gs             = {
         isPotion                        = true,
         ballID                          = 1,
         currentState                    = PlayStateClass.TARGET_SELECTION,
@@ -580,15 +590,16 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
         physics                         = physicsContainer,
         pins                            = {},
         toolStrengths                   = toolStrengths,
+        batchSize                       = batchSize
     }
-    self.gameState          = gs
+    self.gameState       = gs
 
-    gs.physics.onEdgeHit    = function(ballId, edge) self:_onEdgeHit(ballId, edge) end
-    gs.physics.onPinHit     = function(ballId, pinId) self:_onPinHit(ballId, pinId) end
+    gs.physics.onEdgeHit = function(ballId, edge) self:_onEdgeHit(ballId, edge) end
+    gs.physics.onPinHit  = function(ballId, pinId) self:_onPinHit(ballId, pinId) end
 
-    gs.ingredientInfos      = ingredientInfo.new(gs.actualizedIngredients)
+    gs.ingredientInfos   = ingredientInfo.new(gs.actualizedIngredients)
 
-    local recs              = {}
+    local recs           = {}
     for _, obj in ipairs(gs.actualizedIngredients) do
         table.insert(recs, obj.record)
     end

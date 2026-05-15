@@ -95,17 +95,61 @@ function PotionDoneWindow:_updateDoneButtonElement()
 end
 
 function PotionDoneWindow:_getLayout(dt)
-    --- TODO: add buttons for retry/close
     return {
-        layer    = "Windows",
-        type     = ui.TYPE.Container,
+        layer = "Windows",
+        type = ui.TYPE.Container,
         template = interfaces.MWUI.templates.boxTransparent,
-        props    = {
-            anchor           = util.vector2(0.5, 0.5),
+        props = {
+            anchor = util.vector2(0.5, 0.5),
             relativePosition = util.vector2(0.5, 0.5),
         },
-        content  = ui.content {
-            templates.addMarginLayout(self._potionRenderer:GetLayout(dt), const.Padding)
+
+        content = ui.content {
+            templates.addMarginLayout({
+                type = ui.TYPE.Flex,
+                props = {
+                    horizontal = false,
+                },
+                external = {
+                    grow = 1,
+                },
+
+                content = ui.content {
+
+                    -- Main potion renderer
+                    {
+                        type = ui.TYPE.Container,
+                        external = {
+                            grow = 1,
+                        },
+                        content = ui.content {
+                            self._potionRenderer:GetLayout(dt)
+                        }
+                    },
+
+                    -- Padding above buttons
+                    myui.padWidget(0, const.Padding),
+
+                    -- Bottom button row
+                    {
+                        type = ui.TYPE.Flex,
+                        props = {
+                            horizontal = true,
+                            align = ui.ALIGNMENT.Center,
+                            arrange = ui.ALIGNMENT.Center,
+                        },
+                        external = {
+                            grow = 1,
+                            stretch = 1,
+                        },
+                        content = ui.content {
+                            self.againButtonElement,
+                            myui.padWidget(const.Padding, 0),
+                            self.doneButtonElement,
+                        }
+                    }
+                }
+            }, const.Padding)
         }
     }
 end

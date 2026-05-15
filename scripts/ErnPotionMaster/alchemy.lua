@@ -162,6 +162,11 @@ local function onFrame()
                 -- force count to batchSize for rendering in play window
                 ingred.count = batchSize
             end
+            if #ingredientInfos < 2 then
+                settings.debugPrint("out of ingredients")
+                onStopAlchemy()
+                return
+            end
 
             -- todo
             local toolStrengths = {

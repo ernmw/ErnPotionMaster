@@ -117,8 +117,9 @@ local function onStopAlchemy()
         doneWindow:close()
     end
 
-    --- TODO: actually close the "Alchemy" window so it stops triggering
-    --- the onClose handler of the window replacer somehow
+    settings.debugPrint("removemode: alchemy")
+    interfaces.UI.removeMode("Alchemy")
+    settings.debugPrint("startmode: alchemy")
 
     -- forward to global to remove this script
     core.sendGlobalEvent(MOD_NAME .. 'onStopAlchemy', {

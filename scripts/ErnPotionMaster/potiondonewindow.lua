@@ -54,7 +54,7 @@ local localization       = core.l10n(MOD_NAME)
 ---@class PotionDoneWindow
 ---@field window table  openmw ui element
 ---@field _potionRenderer PotionRenderer
----@field _closeCallback fun(data)? close the alchemy window
+---@field _closeCallback fun(data) close the alchemy window
 ---@field _againCallback fun(data)? start up another shot with current ingredients
 ---@field _doneButtonElement any
 ---@field _againButtonElement any
@@ -78,12 +78,12 @@ end
 function PotionDoneWindow:_updateAgainButtonElement()
     local saveFn = function()
         settings.debugPrint("again clicked")
-        self._againCallback()
+        if self._againCallback then self._againCallback() end
     end
     self._againButtonElement.layout = myui.createTextButton(
         self._againButtonElement,
         localization("againButton", {}),
-        "normal",
+        self._againCallback and "normal" or "disabled",
         "saveButton",
         {},
         const.ButtonSize,

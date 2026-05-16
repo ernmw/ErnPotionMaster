@@ -72,8 +72,7 @@ local SelectionStateTransitions = {
             window.state = SelectionStateClass.INGREDIENT_1_SELECTION
         end,
         backward = function(window)
-            settings.debugPrint("close!")
-            window._cancelCallback()
+            error("should not be hit")
         end
     },
     INGREDIENT_1_SELECTION = {
@@ -98,9 +97,7 @@ local SelectionStateTransitions = {
     },
     BATCH_AMOUNT_SELECTION = {
         forward = function(window)
-            settings.debugPrint("play!")
-            --- TODO: pass through relevant data
-            window._brewCallback()
+            error("should not be hit")
         end,
         backward = function(window)
             window.state = SelectionStateClass.INGREDIENT_2_SELECTION
@@ -129,18 +126,32 @@ SelectionWindow.__index         = SelectionWindow
 
 local function newKeys()
     return {
-        forward  = keytrack.NewKey("forward", function(dt)
+        up    = keytrack.NewKey("up", function(dt)
+            --- scroll in up direction of current stage's scrollbar
             return input.isKeyPressed(input.KEY.UpArrow) or
                 (input.getAxisValue(input.CONTROLLER_AXIS.RightY) < -1 * const.stickDeadzone)
         end),
-        backward = keytrack.NewKey("backward", function(dt)
+        down  = keytrack.NewKey("down", function(dt)
+            --- scroll in down direction of current stage's scrollbar
             return input.isKeyPressed(input.KEY.DownArrow) or
                 (input.getAxisValue(input.CONTROLLER_AXIS.RightY) > const.stickDeadzone)
         end),
-        back     = keytrack.NewKey("back", function(dt)
+        left  = keytrack.NewKey("left", function(dt)
+            -- go back a stage. if this is the last stage, no-op
+            return input.isKeyPressed(input.KEY.LeftArrow) or
+                (input.getAxisValue(input.CONTROLLER_AXIS.RightX) < -1 * const.stickDeadzone)
+        end),
+        right = keytrack.NewKey("right", function(dt)
+            -- go right a stage. if this is the last stage, no-op
+            return input.isKeyPressed(input.KEY.RightArrow) or
+                (input.getAxisValue(input.CONTROLLER_AXIS.RightX) > const.stickDeadzone)
+        end),
+        exit  = keytrack.NewKey("back", function(dt)
+            -- go back a stage. if this is the last stage, call the cancel callback
             return input.isControllerButtonPressed(input.CONTROLLER_BUTTON.B)
         end),
-        enter    = keytrack.NewKey("enter", function(dt)
+        enter = keytrack.NewKey("enter", function(dt)
+            -- go forward a stage. if this is the last stage, call the brew callback
             return input.isKeyPressed(input.KEY.Enter) or
                 (input.isControllerButtonPressed(input.CONTROLLER_BUTTON.A))
         end),
@@ -296,8 +307,19 @@ function SelectionWindow:onFrame()
     ---- TODO: these buttons should go back/forth on the scrollbars
     --- TODO: scroll up/down the current bar
     if self._keys.exit.fall then
+        if self.state == SelectionStateClass.PRIMARY_EFFECT_SELECTION then
+            settings.debugPrint("cancelCallback")
+            self._cancelCallback()
+            return
+        end
         SelectionStateTransitions[self.state].backward(self)
     elseif self._keys.enter.fall then
+        if self.state == SelectionStateClass.BATCH_AMOUNT_SELECTION then
+            settings.debugPrint("brewCallback")
+            --- TODO: pass through relevant data
+            self._brewCallback()
+            return
+        end
         SelectionStateTransitions[self.state].forward(self)
     end
 end

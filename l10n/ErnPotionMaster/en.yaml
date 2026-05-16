@@ -22,6 +22,7 @@ effectColumn: "Primary Effect"
 ingredient1Column: "1st Ingredient"
 ingredient2Column: "2nd Ingredient"
 batchColumn: "Batch Size"
+selectEffectHint: "Select a primary effect."
 
 brewButton: "Brew"
 doneButton: "Done"

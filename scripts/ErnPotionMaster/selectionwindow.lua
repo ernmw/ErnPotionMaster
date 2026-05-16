@@ -171,19 +171,19 @@ local function newKeys()
     return {
         up    = keytrack.NewKey("up", function(dt)
             return input.isKeyPressed(input.KEY.UpArrow) or
-                (input.getAxisValue(input.CONTROLLER_AXIS.RightY) < -1 * const.stickDeadzone)
+                (input.getAxisValue(input.CONTROLLER_AXIS.RightY) < -1 * const.StickDeadzone)
         end),
         down  = keytrack.NewKey("down", function(dt)
             return input.isKeyPressed(input.KEY.DownArrow) or
-                (input.getAxisValue(input.CONTROLLER_AXIS.RightY) > const.stickDeadzone)
+                (input.getAxisValue(input.CONTROLLER_AXIS.RightY) > const.StickDeadzone)
         end),
         left  = keytrack.NewKey("left", function(dt)
             return input.isKeyPressed(input.KEY.LeftArrow) or
-                (input.getAxisValue(input.CONTROLLER_AXIS.RightX) < -1 * const.stickDeadzone)
+                (input.getAxisValue(input.CONTROLLER_AXIS.RightX) < -1 * const.StickDeadzone)
         end),
         right = keytrack.NewKey("right", function(dt)
             return input.isKeyPressed(input.KEY.RightArrow) or
-                (input.getAxisValue(input.CONTROLLER_AXIS.RightX) > const.stickDeadzone)
+                (input.getAxisValue(input.CONTROLLER_AXIS.RightX) > const.StickDeadzone)
         end),
         exit  = keytrack.NewKey("back", function(dt)
             -- B button: go back a pane, or cancel on the first pane.
@@ -191,7 +191,7 @@ local function newKeys()
         end),
         enter = keytrack.NewKey("enter", function(dt)
             -- A / Enter: confirm selection / advance pane, brew on last pane.
-            return input.isKeyPressed(input.KEY.Return) or
+            return input.isKeyPressed(input.KEY.Enter) or
                 input.isControllerButtonPressed(input.CONTROLLER_BUTTON.A)
         end),
     }
@@ -272,17 +272,19 @@ local function buildSummaryText(self)
     local effectIdx = self.scrollListEffects:getSelectedIndex()
     if effectIdx then
         local eff = self.primaryEffects[effectIdx]
-        table.insert(parts, templates.effectToString(eff))
+        table.insert(parts, localization("effectLabel", {}) .. ": " .. templates.effectToString(eff))
     end
 
     if self.ingredient1Index then
         local ing = self.filteredIngredients[self.ingredient1Index]
-        table.insert(parts, localization("itemQuantity", { name = ing.record.name, quantity = tostring(ing.count) }))
+        table.insert(parts, localization("ingredient1Label", {}) .. ": " .. ing.record.name
+            .. " (x" .. tostring(ing.count) .. ")")
     end
 
     if self.ingredient2Index then
         local ing = self.filteredIngredients[self.ingredient2Index]
-        table.insert(parts, localization("itemQuantity", { name = ing.record.name, quantity = tostring(ing.count) }))
+        table.insert(parts, localization("ingredient2Label", {}) .. ": " .. ing.record.name
+            .. " (x" .. tostring(ing.count) .. ")")
     end
 
     if self.state == SelectionStateClass.BATCH_AMOUNT_SELECTION then
@@ -303,7 +305,7 @@ end
 --- Create the scrollListEffects list.  Called once during construction.
 ---@param self SelectionWindow
 local function buildEffectList(self)
-    self.scrollListEffects = virtualListExtras.List.create({
+    self.scrollListEffects = virtualListExtras.VirtualListExt.create({
         viewportSize = const.ScrollListPaneSize,
         itemSize     = const.ScrollListItemSize,
         itemCount    = #self.primaryEffects,
@@ -355,7 +357,7 @@ function SelectionWindow:_rebuildIngredient1List()
     self.ingredient2Index      = nil
     self.batchSize             = 1
 
-    self.scrollListIngredient1 = virtualListExtras.List.create({
+    self.scrollListIngredient1 = virtualListExtras.VirtualListExt.create({
         viewportSize = const.ScrollListPaneSize,
         itemSize     = const.ScrollListItemSize,
         itemCount    = #self.filteredIngredients,
@@ -392,7 +394,7 @@ function SelectionWindow:_rebuildIngredient2List()
     self.ingredient2Index      = nil
     self.batchSize             = 1
 
-    self.scrollListIngredient2 = virtualListExtras.List.create({
+    self.scrollListIngredient2 = virtualListExtras.VirtualListExt.create({
         viewportSize = const.ScrollListPaneSize,
         itemSize     = const.ScrollListItemSize,
         itemCount    = #self.filteredIngredients,
@@ -450,7 +452,7 @@ function SelectionWindow:_rebuildBatchList()
         table.insert(self._batchOptions, n)
     end
 
-    self.scrollListBatch = virtualListExtras.List.create({
+    self.scrollListBatch = virtualListExtras.VirtualListExt.create({
         viewportSize = const.ScrollListPaneSize,
         itemSize     = const.ScrollListItemSize,
         itemCount    = #self._batchOptions,

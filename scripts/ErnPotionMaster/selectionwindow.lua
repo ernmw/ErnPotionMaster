@@ -22,42 +22,88 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -- It maintains a registry of balls and pins indexed by their ID,
 -- and sends this info as necessary to both the pachinko physics board and render board.
 
-local MOD_NAME            = require("scripts.ErnPotionMaster.ns")
-local const               = require("scripts.ErnPotionMaster.const")
-local ui                  = require("openmw.ui")
-local util                = require("openmw.util")
-local pself               = require("openmw.self")
-local core                = require("openmw.core")
-local types               = require("openmw.types")
-local placepins           = require("scripts.ErnPotionMaster.placepins")
-local settings            = require("scripts.ErnPotionMaster.settings.settings")
-local physics             = require("scripts.ErnPotionMaster.physics.pachinko")
-local interfaces          = require('openmw.interfaces')
-local shuffle             = require("scripts.ErnPotionMaster.shuffle")
-local aux_util            = require('openmw_aux.util')
-local renderBoard         = require("scripts.ErnPotionMaster.render.board")
-local templates           = require("scripts.ErnPotionMaster.render.templates")
-local effectScore         = require("scripts.ErnPotionMaster.effectscore")
-local ingredientInfo      = require("scripts.ErnPotionMaster.ingredientinfo")
-local search              = require("scripts.ErnPotionMaster.search")
-local common              = require("scripts.ErnPotionMaster.common")
-local sprite              = require("scripts.ErnPotionMaster.render.sprite")
-local keytrack            = require("scripts.ErnPotionMaster.keytrack")
-local myui                = require("scripts.ErnPotionMaster.pcp.myui")
-local trajectory          = require("scripts.ErnPotionMaster.render.trajectory")
-local input               = require("openmw.input")
-local async               = require("openmw.async")
-local ambient             = require("openmw.ambient")
-local potionux            = require("scripts.ErnPotionMaster.render.potionwidget")
-local localization        = core.l10n(MOD_NAME)
+local MOD_NAME                  = require("scripts.ErnPotionMaster.ns")
+local const                     = require("scripts.ErnPotionMaster.const")
+local ui                        = require("openmw.ui")
+local util                      = require("openmw.util")
+local pself                     = require("openmw.self")
+local core                      = require("openmw.core")
+local types                     = require("openmw.types")
+local placepins                 = require("scripts.ErnPotionMaster.placepins")
+local settings                  = require("scripts.ErnPotionMaster.settings.settings")
+local physics                   = require("scripts.ErnPotionMaster.physics.pachinko")
+local interfaces                = require('openmw.interfaces')
+local shuffle                   = require("scripts.ErnPotionMaster.shuffle")
+local aux_util                  = require('openmw_aux.util')
+local renderBoard               = require("scripts.ErnPotionMaster.render.board")
+local templates                 = require("scripts.ErnPotionMaster.render.templates")
+local effectScore               = require("scripts.ErnPotionMaster.effectscore")
+local ingredientInfo            = require("scripts.ErnPotionMaster.ingredientinfo")
+local search                    = require("scripts.ErnPotionMaster.search")
+local common                    = require("scripts.ErnPotionMaster.common")
+local sprite                    = require("scripts.ErnPotionMaster.render.sprite")
+local keytrack                  = require("scripts.ErnPotionMaster.keytrack")
+local myui                      = require("scripts.ErnPotionMaster.pcp.myui")
+local trajectory                = require("scripts.ErnPotionMaster.render.trajectory")
+local input                     = require("openmw.input")
+local async                     = require("openmw.async")
+local ambient                   = require("openmw.ambient")
+local potionux                  = require("scripts.ErnPotionMaster.render.potionwidget")
+local localization              = core.l10n(MOD_NAME)
 
 ---@enum SelectionStateClass
-local SelectionStateClass = {
+local SelectionStateClass       = {
     PRIMARY_EFFECT_SELECTION = 1,
     INGREDIENT_1_SELECTION = 2,
     INGREDIENT_2_SELECTION = 3,
     --- let people do 5x at a time. they end up with 5 identical potions (or failures)
     BATCH_AMOUNT_SELECTION = 4,
+}
+
+---@class SelectionStateMethods
+---@field forward fun(window: SelectionWindow)
+---@field backward fun(window: SelectionWindow)
+
+---@type {[SelectionStateClass]: SelectionStateMethods}
+local SelectionStateTransitions = {
+    PRIMARY_EFFECT_SELECTION = {
+        forward = function(window)
+            settings.debugPrint("advance to INGREDIENT_1_SELECTION")
+            window.state = SelectionStateClass.INGREDIENT_1_SELECTION
+        end,
+        backward = function(window)
+            settings.debugPrint("close!")
+            window._cancelCallback()
+        end
+    },
+    INGREDIENT_1_SELECTION = {
+        forward = function(window)
+            settings.debugPrint("advance to INGREDIENT_2_SELECTION")
+            window.state = SelectionStateClass.INGREDIENT_2_SELECTION
+        end,
+        backward = function(window)
+            window.state = SelectionStateClass.PRIMARY_EFFECT_SELECTION
+        end
+    },
+    INGREDIENT_2_SELECTION = {
+        forward = function(window)
+            settings.debugPrint("advance to BATCH_AMOUNT_SELECTION")
+            window.state = SelectionStateClass.BATCH_AMOUNT_SELECTION
+        end,
+        backward = function(window)
+            window.state = SelectionStateClass.INGREDIENT_1_SELECTION
+        end
+    },
+    BATCH_AMOUNT_SELECTION = {
+        forward = function(window)
+            settings.debugPrint("play!")
+            --- TODO: pass through relevant data
+            window._brewCallback()
+        end,
+        backward = function(window)
+            window.state = SelectionStateClass.INGREDIENT_2_SELECTION
+        end
+    }
 }
 
 ---@class SelectionWindow
@@ -70,8 +116,8 @@ local SelectionStateClass = {
 ---@field _keys table
 ---@field state SelectionStateClass
 --- TODO: add fields for UI scrollbar stuff
-local SelectionWindow     = {}
-SelectionWindow.__index   = SelectionWindow
+local SelectionWindow           = {}
+SelectionWindow.__index         = SelectionWindow
 
 
 local function newKeys()
@@ -204,6 +250,7 @@ end
 ---@return SelectionWindow
 function SelectionWindow.new(record, count, cancelCallback, brewCallback)
     local self = setmetatable({
+        state                = SelectionStateClass.PRIMARY_EFFECT_SELECTION,
         _cancelCallback      = cancelCallback,
         _brewCallback        = brewCallback,
         _cancelButtonElement = ui.create {},
@@ -212,7 +259,7 @@ function SelectionWindow.new(record, count, cancelCallback, brewCallback)
     }, SelectionWindow)
     self:_updateCancelButtonElement()
     self:_updateBrewButtonElement()
-    self.window = ui.create(self._potionRenderer)
+    self.window = ui.create(self:_getLayout(0))
     return self
 end
 
@@ -234,11 +281,9 @@ function SelectionWindow:onFrame()
     ---- TODO: these buttons should go back/forth on the scrollbars
     --- TODO: scroll up/down the current bar
     if self._keys.exit.fall then
-        settings.debugPrint("exit button")
-        self._closeCallback()
+        SelectionStateTransitions[self.state].backward(self)
     elseif self._keys.enter.fall then
-        settings.debugPrint("again button")
-        self._againCallback()
+        SelectionStateTransitions[self.state].forward(self)
     end
 end
 

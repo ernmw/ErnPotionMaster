@@ -16,12 +16,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 
--- This file contains the game state, including the board.
--- It owns and rebuilds the pachinko physics board as necessary.
--- It owns and rebuilds the render board as necessary.
--- It maintains a registry of balls and pins indexed by their ID,
--- and sends this info as necessary to both the pachinko physics board and render board.
-
 local MOD_NAME         = require("scripts.ErnPotionMaster.ns")
 local const            = require("scripts.ErnPotionMaster.const")
 local ui               = require("openmw.ui")
@@ -43,167 +37,211 @@ local potiondonewindow = require("scripts.ErnPotionMaster.potiondonewindow")
 local search           = require("scripts.ErnPotionMaster.search")
 local common           = require("scripts.ErnPotionMaster.common")
 
+local playwindow       = require("scripts.ErnPotionMaster.playwindow")
+local selectionwindow  = require("scripts.ErnPotionMaster.selectionwindow")
 
-local shootPosition = util.vector2(0.5, 0.05):emul(const.BoardSize)
-
---[[
-Before you begin, you pick the target effect you want. You can only choose effects that are present in atleast two different ingredients available to you.
-This is used to figure out if you are trying to make a potion (positive effect) or poison (negative effect).
-If you're making a potion, all positive effects are Intended and negative effects are Unintended.
-This is reversed for poisons.
-
-After choosing your effect, you pick at two to four ingredients from a secondary list.
-For the first two ingredients you pick, the list will only contain ingredients that contain your desired effect.
-For third and and fourth ingredients you might pick, the list will only contain ingredients that have at least one effect in common with all the previously-selected ingredients.
-These ingredients are shot as Balls.
-
-After picking two to four ingredients, you can click on a "Create" button.
-This will delete the ingredients from your inventory and start up the game board UI.
-
-This file contains the game board UX, which is what follows:
-
-A Ball is one ingredient.
-There will be at least one pin per ingredient effect (up to 4). The more expensive the ingredient, and the better your Motar and Pestle, the more pins will be Effect Pins.
-Hit the effect pin to increase the Effect Score for that individual effect.
-Each time you hit an effect pin for the same effect on the same shot,
-you get exponentially more points for that Effect Score.
-As the Effect Score increases, you get additional magnitude and duration for that effect.
-
-If you have the appropriate alchemy equipment, you will get one pin per each equipment item:
-- Alembic: Reduces a random Unintended effect Effect Score. The amount depends on the tool quality.
-- Retort: Multiplies the current Effect Score of a random Intended effect. The amount depends on the tool quality.
-- Calcinator: Un-pops pins on the board instantly. The chance to un-Pop a pin depends on the tool quality. Before un-Popping, popped pins have their positions shuffled.
-Mortar and Pestle is different, since it has an impact on the number of Effect Pins.
-
-The Effect Score sticks around between Shots.
-The board is reset after each Shot.
-After making your predetermined number of Shots (2 to 4), the potion is created based on its Effect Scores.
-
-Pins have a chance to Pop when they are hit based on your Alchemy skill, Intelligence, and Luck.
-]]
-
-local playwindow = require("scripts.ErnPotionMaster.playwindow")
+------------------------------------------------------------------------
+-- State machine
+------------------------------------------------------------------------
 
 ---@enum StateClass
-local StateClass = {
-    SELECTION_WINDOW = 1,
-    --- the playwindow takes over in this state
-    PLAY = 2,
-    --- Allow for a quick "do it again" button that sets up the PLAY state
-    --- again with the same ingredients, if they are available.
+local StateClass       = {
+    --- Player picks effect, ingredient 1, ingredient 2, and batch size.
+    SELECTION_WINDOW   = 1,
+    --- The playwindow takes over: pachinko minigame runs.
+    PLAY               = 2,
+    --- Allow a quick "do it again" button that re-runs PLAY with the same
+    --- ingredients, if they are still available.
     POTION_DONE_WINDOW = 3,
 }
 
 ---@type StateClass
-local currentState = StateClass.PLAY
+local currentState     = StateClass.SELECTION_WINDOW
 
-local batchSize = 3
+------------------------------------------------------------------------
+-- Per-run data (populated by the selection window, consumed by PLAY)
+------------------------------------------------------------------------
+
+---@type BrewData?
+local pendingBrewData  = nil
+
+------------------------------------------------------------------------
+-- Window handles
+------------------------------------------------------------------------
+
+---@type SelectionWindow?
+local selWindow        = nil
 
 ---@type PlayWindow?
-local play
+local play             = nil
 
 ---@type PotionDoneWindow?
-local doneWindow
+local doneWindow       = nil
+
+------------------------------------------------------------------------
+-- Helpers
+------------------------------------------------------------------------
 
 local function onStopAlchemy()
     settings.debugPrint("stop alchemy")
-    -- do cleanup
+
+    if selWindow then
+        selWindow:close(); selWindow = nil
+    end
     if play then
-        play:close()
+        play:close(); play = nil
     end
     if doneWindow then
-        doneWindow:close()
+        doneWindow:close(); doneWindow = nil
     end
+
+    pendingBrewData = nil
 
     settings.debugPrint("removemode: alchemy")
     interfaces.UI.removeMode("Alchemy")
     settings.debugPrint("startmode: alchemy")
 
-    -- forward to global to remove this script
     core.sendGlobalEvent(MOD_NAME .. 'onStopAlchemy', {
         player = pself,
     })
 end
 
+--- Consume pendingBrewData to decrement ingredient stacks and spin up
+--- a PlayWindow.  Returns false (and calls onStopAlchemy) if ingredients
+--- are no longer available.
+---@return boolean  success
+local function startPlay()
+    if not pendingBrewData then
+        settings.debugPrint("startPlay: no pendingBrewData")
+        onStopAlchemy()
+        return false
+    end
+
+    local brew      = pendingBrewData
+    local batchSize = brew.batchSize
+
+    -- Validate that both ingredients still have enough stock.
+    local function hasEnough(ing)
+        local total = 0
+        for _, obj in ipairs(ing.objects) do
+            if obj:isValid() then total = total + obj.count end
+        end
+        return total >= batchSize
+    end
+
+    if not hasEnough(brew.ingredient1) or not hasEnough(brew.ingredient2) then
+        settings.debugPrint("startPlay: not enough ingredients")
+        onStopAlchemy()
+        return false
+    end
+
+    -- Decrement both ingredient stacks.
+    core.sendGlobalEvent(MOD_NAME .. 'onDecrementItems', {
+        items  = brew.ingredient1.objects,
+        amount = batchSize,
+    })
+    core.sendGlobalEvent(MOD_NAME .. 'onDecrementItems', {
+        items  = brew.ingredient2.objects,
+        amount = batchSize,
+    })
+
+    -- Fix the counts for rendering inside the play window
+    -- (actual object counts may have changed by the time the window reads them).
+    brew.ingredient1.count = batchSize
+    brew.ingredient2.count = batchSize
+
+    -- TODO: read actual tool strengths from player inventory.
+    local toolStrengths = {
+        [const.ToolClass.CALCINATOR] = 1,
+        [const.ToolClass.ALEMBIC]    = 1,
+        [const.ToolClass.MORTAR]     = 1,
+        [const.ToolClass.RETORT]     = 1,
+    }
+
+    play = playwindow.new({
+        ingredientInfos = { brew.ingredient1, brew.ingredient2 },
+        toolStrengths   = toolStrengths,
+        desiredEffect   = brew.primaryEffect,
+        doneCallback    = function(data)
+            currentState = StateClass.POTION_DONE_WINDOW
+            play         = nil
+        end,
+    })
+
+    return true
+end
+
+------------------------------------------------------------------------
+-- onInit / onFrame
+------------------------------------------------------------------------
 
 local function onInit(data)
     settings.debugPrint("start alchemy")
+    -- State is already SELECTION_WINDOW; selWindow will be created on the
+    -- first onFrame tick so the UI system is fully ready.
 end
 
 local function onFrame()
-    if currentState == StateClass.PLAY then
+    ---------- SELECTION_WINDOW ----------------------------------------
+    if currentState == StateClass.SELECTION_WINDOW then
+        if not selWindow then
+            selWindow = selectionwindow.new(
+            -- cancelCallback: player hit cancel / B on first pane.
+                function()
+                    settings.debugPrint("selection cancelled")
+                    onStopAlchemy()
+                end,
+                -- brewCallback: player confirmed all four selections.
+                ---@param data BrewData
+                function(data)
+                    settings.debugPrint("selection confirmed, batchSize=" .. tostring(data.batchSize))
+                    pendingBrewData = data
+
+                    -- Close the selection window before opening the play window.
+                    if selWindow then
+                        selWindow:close()
+                        selWindow = nil
+                    end
+
+                    currentState = StateClass.PLAY
+                end
+            )
+        end
+        selWindow:onFrame()
+
+        ---------- PLAY ----------------------------------------------------
+    elseif currentState == StateClass.PLAY then
         if not play then
-            --- TODO: start up planning UI.
-            --- once that's done, start up playwindow UI.
-
-            -- TODO: actually do selection logic. this is just for testing
-            local inventories = { pself.type.inventory(pself) }
-            ---@type ActualizedIngredient[]
-            local ingredientInfos = {}
-            for _, item in ipairs(shuffle(common.getAllIngredients(inventories))) do
-                if #ingredientInfos >= 2 then
-                    break
-                end
-                if item.count >= batchSize then
-                    table.insert(ingredientInfos, item)
-                    settings.debugPrint("found ingredient: " .. aux_util.deepToString(item, 3))
-                end
-            end
-
-            for _, ingred in ipairs(ingredientInfos) do
-                core.sendGlobalEvent(MOD_NAME .. 'onDecrementItems', {
-                    items = ingred.objects,
-                    amount = batchSize,
-                })
-                -- force count to batchSize for rendering in play window
-                ingred.count = batchSize
-            end
-            if #ingredientInfos < 2 then
-                settings.debugPrint("out of ingredients")
-                onStopAlchemy()
+            if not startPlay() then
+                -- startPlay already called onStopAlchemy on failure.
                 return
             end
-
-            -- todo
-            local toolStrengths = {
-                [const.ToolClass.CALCINATOR] = 1,
-                [const.ToolClass.ALEMBIC] = 1,
-                [const.ToolClass.MORTAR] = 1,
-                [const.ToolClass.RETORT] = 1,
-            }
-
-            local desiredEffect = common.getMagicEffectsFromIngredients({ ingredientInfos[1].record })[1]
-            settings.debugPrint("desired effect: " .. tostring(desiredEffect.id))
-
-            play = playwindow.new({
-                ingredientInfos = ingredientInfos,
-                toolStrengths = toolStrengths,
-                desiredEffect = desiredEffect,
-                doneCallback = function(data)
-                    currentState = StateClass.POTION_DONE_WINDOW
-                    play = nil
-                end
-            })
         end
         play:onFrame()
+
+        ---------- POTION_DONE_WINDOW --------------------------------------
     elseif currentState == StateClass.POTION_DONE_WINDOW then
         if not doneWindow then
+            -- TODO: replace the hardcoded skooma record with the actual
+            --       potion produced by the play window.
             doneWindow = potiondonewindow.new(
                 types.Potion.records["potion_skooma_01"],
-                batchSize,
+                pendingBrewData and pendingBrewData.batchSize or 1,
+                -- "Close alchemy" button.
                 function(data)
-                    -- TODO: finish
                     settings.debugPrint("close alchemy window button pressed")
                     onStopAlchemy()
                 end,
+                -- "Do it again" button: only works if we still have pendingBrewData.
                 function(data)
-                    -- TODO: finish
                     settings.debugPrint("do alchemy again")
                     currentState = StateClass.PLAY
                     if doneWindow then
                         doneWindow:close()
                         doneWindow = nil
                     end
+                    -- pendingBrewData is intentionally kept so startPlay() can
+                    -- use it again (it will re-validate stock before decrementing).
                 end
             )
         end
@@ -211,9 +249,13 @@ local function onFrame()
     end
 end
 
+------------------------------------------------------------------------
+-- Module export
+------------------------------------------------------------------------
+
 return {
     engineHandlers = {
-        onInit = onInit,
+        onInit  = onInit,
         onFrame = onFrame,
     },
     eventHandlers = {

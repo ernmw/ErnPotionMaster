@@ -18,6 +18,11 @@ magnitudeWithDuration: "{magnitude} for {duration} seconds"
 
 itemQuantity: "{name} x{quantity}"
 
+effectColumn: "Primary Effect"
+ingredient1Column: "1st Ingredient"
+ingredient2Column: "2nd Ingredient"
+batchColumn: "Batch Size"
+
 brewButton: "Brew"
 doneButton: "Done"
 againButton: "Again"

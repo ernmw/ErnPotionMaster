@@ -99,6 +99,8 @@ local SelectionStateTransitions = {
             window.ingredient1Index = nil
             window.ingredient2Index = nil
             window.batchSize        = 1
+            window._batchIndex      = 1
+            window._batchOptions    = {}
             window.scrollListIngredient1:changeSelection(nil)
             window.scrollListIngredient2:changeSelection(nil)
             window.state = SelectionStateClass.PRIMARY_EFFECT_SELECTION
@@ -114,6 +116,8 @@ local SelectionStateTransitions = {
             -- Clear ingredient 2 and batch.
             window.ingredient2Index = nil
             window.batchSize        = 1
+            window._batchIndex      = 1
+            window._batchOptions    = {}
             window.scrollListIngredient2:changeSelection(nil)
             window.state = SelectionStateClass.INGREDIENT_1_SELECTION
         end
@@ -123,9 +127,9 @@ local SelectionStateTransitions = {
             error("should not be hit")
         end,
         backward = function(window)
-            window.batchSize = 1
-            window.scrollListBatch:changeSelection(nil)
-            window.state = SelectionStateClass.INGREDIENT_2_SELECTION
+            window._batchIndex = 1
+            window.batchSize   = 1
+            window.state       = SelectionStateClass.INGREDIENT_2_SELECTION
         end
     }
 }
@@ -143,14 +147,14 @@ local SelectionStateTransitions = {
 ---@field scrollListEffects       VirtualListExt
 ---@field scrollListIngredient1   VirtualListExt
 ---@field scrollListIngredient2   VirtualListExt
----@field scrollListBatch         VirtualListExt
 ---@field availableIngredients    ActualizedIngredient[] ALL ingredients, unfiltered
 ---@field primaryEffects          MagicEffectWithParams[] effects shared by ≥2 different ingredients
 ---@field filteredIngredients     ActualizedIngredient[] ingredients that carry the chosen primary effect
 ---@field ingredient1Index        number?  index into filteredIngredients
 ---@field ingredient2Index        number?  index into filteredIngredients (≠ ingredient1Index)
----@field batchSize               number   1-based; clamped to min(ing1.count, ing2.count)
+---@field batchSize               number   current batch size value
 ---@field _batchOptions           number[] list of valid batch sizes (e.g. {1,2,3,4,5})
+---@field _batchIndex             number   1-based index into _batchOptions
 ---@field _keys                   table
 ---@field state                   SelectionStateClass
 
@@ -201,9 +205,10 @@ end
 -- Internal helpers
 ------------------------------------------------------------------------
 
---- Returns the VirtualListExt that is "active" for the current state.
+--- Returns the VirtualListExt that is "active" for the current state,
+--- or nil for the batch pane (which uses a select-style widget, not a list).
 ---@param self SelectionWindow
----@return VirtualListExt
+---@return VirtualListExt?
 local function activeList(self)
     if self.state == SelectionStateClass.PRIMARY_EFFECT_SELECTION then
         return self.scrollListEffects
@@ -212,15 +217,19 @@ local function activeList(self)
     elseif self.state == SelectionStateClass.INGREDIENT_2_SELECTION then
         return self.scrollListIngredient2
     else
-        return self.scrollListBatch
+        -- BATCH_AMOUNT_SELECTION uses a select widget, not a scroll list.
+        return nil
     end
 end
 
 --- Scroll the active list one step up or down.
+--- No-ops on the batch pane (which uses left/right, not up/down).
 ---@param self SelectionWindow
 ---@param direction number  -1 for up, +1 for down
 local function scrollActiveList(self, direction)
-    local list       = activeList(self)
+    local list = activeList(self)
+    if not list then return end
+
     local scrollData = list:getElement().layout.userData.scrollData
 
     local current    = list:getSelectedIndex()
@@ -248,7 +257,6 @@ local function scrollActiveList(self, direction)
 end
 
 --- Whether the current state has a valid selection committed.
---- (For effects/ingredients we require an index; batch always has one.)
 ---@param self SelectionWindow
 ---@return boolean
 local function currentPaneHasSelection(self)
@@ -259,7 +267,8 @@ local function currentPaneHasSelection(self)
     elseif self.state == SelectionStateClass.INGREDIENT_2_SELECTION then
         return self.ingredient2Index ~= nil
     else -- BATCH_AMOUNT_SELECTION
-        return self.scrollListBatch:getSelectedIndex() ~= nil
+        -- The select widget always has a valid value once _rebuildBatchList ran.
+        return #self._batchOptions > 0
     end
 end
 
@@ -432,11 +441,10 @@ function SelectionWindow:_rebuildIngredient2List()
     })
 end
 
---- (Re)build the batch-size list.
+--- (Re)build the batch-size options.
 --- Called when advancing from INGREDIENT_2_SELECTION.
+--- No VirtualListExt — the batch pane uses a select-style widget instead.
 function SelectionWindow:_rebuildBatchList()
-    self.batchSize = 1
-
     -- Determine the maximum number of batches we can brew.
     local maxCount = MAX_BATCH
     if self.ingredient1Index and self.filteredIngredients[self.ingredient1Index] then
@@ -452,34 +460,9 @@ function SelectionWindow:_rebuildBatchList()
         table.insert(self._batchOptions, n)
     end
 
-    self.scrollListBatch = virtualListExtras.VirtualListExt.create({
-        viewportSize = const.ScrollListPaneSize,
-        itemSize     = const.ScrollListItemSize,
-        itemCount    = #self._batchOptions,
-        itemLayout   = function(i, list)
-            local n = self._batchOptions[i]
-            return list:createItemLayout({
-                index = i,
-                props = { text = "x" .. tostring(n) },
-                onMousePress = function(e, layout)
-                    if e.button == 1 then
-                        list:changeSelection(i)
-                        self.batchSize = n
-                    end
-                end,
-            })
-        end,
-    })
-    self.scrollListBatch:setKeyPressHandler({
-        setSelectedIndex = function(i)
-            self.scrollListBatch:changeSelection(i)
-            self.batchSize = self._batchOptions[i]
-        end,
-    })
-
-    -- Default to first option (x1).
-    self.scrollListBatch:changeSelection(1)
-    self.batchSize = self._batchOptions[1]
+    -- Default to x1.
+    self._batchIndex = 1
+    self.batchSize   = self._batchOptions[1]
 end
 
 ------------------------------------------------------------------------
@@ -487,10 +470,9 @@ end
 ------------------------------------------------------------------------
 
 function SelectionWindow:_updateBrewButtonElement()
-    -- Brew is only actionable on the last pane AND when there is a batch selection.
+    -- Brew is only actionable on the last pane once options have been built.
     local isReady = (self.state == SelectionStateClass.BATCH_AMOUNT_SELECTION) and
-        (self.scrollListBatch ~= nil) and
-        (self.scrollListBatch:getSelectedIndex() ~= nil)
+        (#self._batchOptions > 0)
 
     local brewFn = function()
         settings.debugPrint("brew clicked")
@@ -603,34 +585,147 @@ local function columnLayout(self, label, listExt, paneState)
     }
 end
 
---- Builds the right-hand "batch + buttons" column layout.
+--- Step the batch selector by delta (-1 or +1). Called from onFrame and mouse clicks.
+---@param delta number
+function SelectionWindow:_stepBatch(delta)
+    local newIdx = self._batchIndex + delta
+    if newIdx < 1 then newIdx = 1 end
+    if newIdx > #self._batchOptions then newIdx = #self._batchOptions end
+    if newIdx ~= self._batchIndex then
+        ambient.playSound("menu click")
+        self._batchIndex = newIdx
+        self.batchSize   = self._batchOptions[newIdx]
+    end
+end
+
+--- Builds the inline select widget for batch size (left arrow / value / right arrow).
+--- Mirrors the 'select' renderer from renderers.lua.
 ---@param self SelectionWindow
 ---@return Layout
-local function batchColumnLayout(self)
-    local isActive = (self.state == SelectionStateClass.BATCH_AMOUNT_SELECTION)
-    local boxTemplate = isActive
-        and interfaces.MWUI.templates.box
-        or interfaces.MWUI.templates.boxTransparent
+local function batchSelectorLayout(self)
+    local isActive   = (self.state == SelectionStateClass.BATCH_AMOUNT_SELECTION)
+    local hasOptions = #self._batchOptions > 0
 
-    -- Only show the batch list when it has been built.
-    local batchListContent
-    if self.scrollListBatch then
-        batchListContent = {
-            type     = ui.TYPE.Container,
-            template = boxTemplate,
-            content  = ui.content { self.scrollListBatch:getElement() },
-        }
-    else
-        batchListContent = {
-            type  = ui.TYPE.Text,
-            props = {
-                text      = "--",
-                textSize  = 14,
-                textColor = util.color.rgb(0.5, 0.5, 0.5),
+    -- Disabled appearance when options haven't been built yet.
+    if not hasOptions then
+        return {
+            template = interfaces.MWUI.templates.disabled,
+            content  = ui.content {
+                {
+                    template = interfaces.MWUI.templates.box,
+                    content  = ui.content {
+                        {
+                            template = interfaces.MWUI.templates.padding,
+                            content  = ui.content {
+                                {
+                                    type    = ui.TYPE.Flex,
+                                    props   = {
+                                        horizontal = true,
+                                        arrange    = ui.ALIGNMENT.Center,
+                                    },
+                                    content = ui.content {
+                                        {
+                                            type  = ui.TYPE.Image,
+                                            props = {
+                                                resource = ui.texture { path = "textures/omw_menu_scroll_left.dds" },
+                                                size     = util.vector2(12, 12),
+                                            },
+                                        },
+                                        { template = interfaces.MWUI.templates.interval },
+                                        {
+                                            template = interfaces.MWUI.templates.textNormal,
+                                            props    = { text = "--" },
+                                            external = { grow = 1 },
+                                        },
+                                        { template = interfaces.MWUI.templates.interval },
+                                        {
+                                            type  = ui.TYPE.Image,
+                                            props = {
+                                                resource = ui.texture { path = "textures/omw_menu_scroll_right.dds" },
+                                                size     = util.vector2(12, 12),
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
             },
         }
     end
 
+    local function stepBatch(delta)
+        self:_stepBatch(delta)
+    end
+
+    local label      = "x" .. tostring(self.batchSize)
+    local labelColor = isActive
+        and util.color.rgb(1, 1, 1)
+        or util.color.rgb(0.6, 0.6, 0.6)
+
+    return {
+        template = interfaces.MWUI.templates.box,
+        content  = ui.content {
+            {
+                template = interfaces.MWUI.templates.padding,
+                content  = ui.content {
+                    {
+                        type    = ui.TYPE.Flex,
+                        props   = {
+                            horizontal = true,
+                            arrange    = ui.ALIGNMENT.Center,
+                        },
+                        content = ui.content {
+                            -- Left arrow
+                            {
+                                type   = ui.TYPE.Image,
+                                props  = {
+                                    resource = ui.texture { path = "textures/omw_menu_scroll_left.dds" },
+                                    size     = util.vector2(12, 12),
+                                },
+                                events = {
+                                    mouseClick = async:callback(function()
+                                        if isActive then stepBatch(-1) end
+                                    end),
+                                },
+                            },
+                            { template = interfaces.MWUI.templates.interval },
+                            -- Current value
+                            {
+                                template = interfaces.MWUI.templates.textNormal,
+                                props    = {
+                                    text      = label,
+                                    textColor = labelColor,
+                                },
+                                external = { grow = 1 },
+                            },
+                            { template = interfaces.MWUI.templates.interval },
+                            -- Right arrow
+                            {
+                                type   = ui.TYPE.Image,
+                                props  = {
+                                    resource = ui.texture { path = "textures/omw_menu_scroll_right.dds" },
+                                    size     = util.vector2(12, 12),
+                                },
+                                events = {
+                                    mouseClick = async:callback(function()
+                                        if isActive then stepBatch(1) end
+                                    end),
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+    }
+end
+
+--- Builds the right-hand "batch + buttons" column layout.
+---@param self SelectionWindow
+---@return Layout
+local function batchColumnLayout(self)
     return {
         type     = ui.TYPE.Flex,
         props    = {
@@ -641,7 +736,7 @@ local function batchColumnLayout(self)
         content  = ui.content {
             columnHeader(localization("batchColumn", {})),
             myui.padWidget(0, const.Padding * 0.5),
-            batchListContent,
+            batchSelectorLayout(self),
             myui.padWidget(0, const.Padding),
             self._brewButtonElement,
             myui.padWidget(0, const.Padding * 0.5),
@@ -764,7 +859,7 @@ function SelectionWindow.new(cancelCallback, brewCallback)
         ingredient2Index     = nil,
         batchSize            = 1,
         _batchOptions        = {},
-        scrollListBatch      = nil,
+        _batchIndex          = 1,
     }, SelectionWindow)
 
     self:_updateCancelButtonElement()
@@ -806,10 +901,19 @@ function SelectionWindow:onFrame()
     end
 
     -- Left: go back one pane (or no-op on first pane — handled by 'exit').
-    if self._keys.left.fall then
-        if self.state ~= SelectionStateClass.PRIMARY_EFFECT_SELECTION then
-            ambient.playSound("menu click")
-            SelectionStateTransitions[self.state].backward(self)
+    --        On the batch pane, left/right step the selector instead.
+    if self.state == SelectionStateClass.BATCH_AMOUNT_SELECTION then
+        if self._keys.left.fall then
+            self:_stepBatch(-1)
+        elseif self._keys.right.fall then
+            self:_stepBatch(1)
+        end
+    else
+        if self._keys.left.fall then
+            if self.state ~= SelectionStateClass.PRIMARY_EFFECT_SELECTION then
+                ambient.playSound("menu click")
+                SelectionStateTransitions[self.state].backward(self)
+            end
         end
     end
 

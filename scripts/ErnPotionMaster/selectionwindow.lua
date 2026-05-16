@@ -48,6 +48,7 @@ local trajectory                = require("scripts.ErnPotionMaster.render.trajec
 local input                     = require("openmw.input")
 local async                     = require("openmw.async")
 local ambient                   = require("openmw.ambient")
+local virtualListExtras         = require("scripts.ErnEnchantersRecharge.virtual_list.extras")
 local potionux                  = require("scripts.ErnPotionMaster.render.potionwidget")
 local localization              = core.l10n(MOD_NAME)
 
@@ -111,8 +112,11 @@ local SelectionStateTransitions = {
 ---@field _brewCallback fun(data) start up another shot with current ingredients
 ---@field _cancelButtonElement any
 ---@field _brewButtonElement any
+---@field scrollListEffects VirtualListExt
+---@field scrollListIngredient1 VirtualListExt
+---@field scrollListIngredient2 VirtualListExt
 ---@field availableIngredients ActualizedIngredient[] this is ALL ingredients, unfiltered.
----@field primaryEffect MagicEffectWithParams? this is the list of effects available to the player. only effects that are shared by at least two different ingredients show up in the list.
+---@field primaryEffects MagicEffectWithParams[] this is the list of effects available to the player. only effects that are shared by at least two different ingredients show up in the list.
 ---@field filteredIngredients ActualizedIngredient[] this is a subset of availableIngredients. it has only ingredients in which one effect is the primaryEffect.
 ---@field ingredient1Index number? this is an index into filteredIngredients
 ---@field ingredient2Index number? this is an index into filteredIngredients. it's not allowed to equal ingredient1Index.
@@ -215,12 +219,34 @@ function SelectionWindow:_getLayout(dt)
                 },
 
                 content = ui.content {
-
-                    -- Main potion renderer
+                    --- scrollbars
                     {
-                        type = ui.TYPE.Container,
+                        type = ui.TYPE.Flex,
+                        props = {
+                            horizontal = true,
+                            align = ui.ALIGNMENT.Center,
+                            arrange = ui.ALIGNMENT.Center,
+                        },
                         external = {
                             grow = 1,
+                            stretch = 1,
+                        },
+                        content = ui.content {
+                            self.scrollListEffects:getElement(),
+                            myui.padWidget(const.Padding, 0),
+                            self._cancelButtonElement,
+                        }
+                    },
+                    --- show actively selected item row
+                    {
+                        type = ui.TYPE.Flex,
+                        props = {
+                            horizontal = true,
+                            align = ui.ALIGNMENT.Center,
+                            arrange = ui.ALIGNMENT.Center,
+                        },
+                        external = {
+                            stretch = 1,
                         },
                         content = ui.content {
                             {
@@ -233,11 +259,7 @@ function SelectionWindow:_getLayout(dt)
                             }
                         }
                     },
-
-                    -- Padding above buttons
-                    myui.padWidget(0, const.Padding),
-
-                    -- Bottom button row
+                    --- bottom button row
                     {
                         type = ui.TYPE.Flex,
                         props = {
@@ -246,7 +268,6 @@ function SelectionWindow:_getLayout(dt)
                             arrange = ui.ALIGNMENT.Center,
                         },
                         external = {
-                            grow = 1,
                             stretch = 1,
                         },
                         content = ui.content {
@@ -261,12 +282,13 @@ function SelectionWindow:_getLayout(dt)
     }
 end
 
----@param record table potion record
----@param count number
 ---@param cancelCallback fun(data) close the alchemy window
 ---@param brewCallback fun(data) start up another shot with current ingredients
 ---@return SelectionWindow
-function SelectionWindow.new(record, count, cancelCallback, brewCallback)
+function SelectionWindow.new(cancelCallback, brewCallback)
+    --- TODO: grab all nearby inventories
+    local inventories = { pself.type.inventory(pself) }
+
     local self = setmetatable({
         state                = SelectionStateClass.PRIMARY_EFFECT_SELECTION,
         _cancelCallback      = cancelCallback,
@@ -274,16 +296,34 @@ function SelectionWindow.new(record, count, cancelCallback, brewCallback)
         _cancelButtonElement = ui.create {},
         _brewButtonElement   = ui.create {},
         _keys                = newKeys(),
-        availableIngredients = {},
+        availableIngredients = common.getAllIngredients(inventories),
     }, SelectionWindow)
     self:_updateCancelButtonElement()
     self:_updateBrewButtonElement()
 
+    -- find all effects.
+    -- the membership of this is stable.
+    self.primaryEffects = common.getSharedMagicEffectsFromActualizedIngredients(self.availableIngredients)
+    self.scrollListEffects = virtualListExtras.List.create({
+        viewportSize = const.ScrollListPaneSize,
+        itemSize = const.ScrollListItemSize,
+        itemCount = #self.primaryEffects,
+        itemLayout = function(i, list)
+            return list:createItemLayout({
+                index = i,
+                props = { text = templates.effectToString(self.primaryEffects[i]) },
+                onMousePress = function(i)
+                    list:changeSelection(i)
+                end,
+            })
+        end,
+    })
+    self.scrollListEffects:setKeyPressHandler({
+        setSelectedIndex = function(i)
+            self.scrollListEffects:changeSelection(i)
+        end,
+    })
 
-    --- TODO: grab all nearby inventories
-    local inventories = { pself.type.inventory(pself) }
-
-    self.availableIngredients = common.getAllIngredients(inventories)
 
     self.window = ui.create(self:_getLayout(0))
     return self
@@ -316,7 +356,7 @@ function SelectionWindow:onFrame()
     elseif self._keys.enter.fall then
         if self.state == SelectionStateClass.BATCH_AMOUNT_SELECTION then
             settings.debugPrint("brewCallback")
-            --- TODO: pass through relevant data
+            --- TODO: pass through relevant data: primary effect, batch size, ingredient 1, ingredient 2, total counts of both ingredients
             self._brewCallback()
             return
         end

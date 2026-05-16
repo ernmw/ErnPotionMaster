@@ -53,6 +53,7 @@ function VirtualList.new(element, itemWidth, itemHeight, itemCount, itemLayout, 
     }, VirtualList)
 end
 
+
 --- Convenience method to cast a variable to a virtual list.
 ---
 ---@param element any
@@ -62,6 +63,7 @@ function VirtualList.from(element)
     assert(getmetatable(scrollData) == VirtualList)
     return scrollData
 end
+
 
 --
 -- Content accessors
@@ -74,6 +76,7 @@ function VirtualList:getElement()
     return self.element
 end
 
+
 --- Get the content container layout, which is the parent layout of the list items.
 ---
 ---@package
@@ -82,6 +85,7 @@ function VirtualList:getContentContainer()
     return self.element.layout.content["contentContainer"]
 end
 
+
 --- Get the content list. (i.e. the actual list containing the user-created content)
 ---
 ---@package
@@ -89,6 +93,7 @@ end
 function VirtualList:getContent()
     return self:getContentContainer().content
 end
+
 
 --- Get the scrollbar layout.
 ---
@@ -102,6 +107,7 @@ function VirtualList:getScrollbar()
     return scrollbar
 end
 
+
 --
 -- Item Geometry
 --
@@ -113,6 +119,7 @@ function VirtualList:getItemSize()
     return util.vector2(self.itemWidth, self.itemHeight)
 end
 
+
 --- Get the top pixel offset of the item at the given index.
 ---
 ---@param index number
@@ -120,6 +127,7 @@ end
 function VirtualList:getItemTop(index)
     return (index - 1) * self.itemHeight
 end
+
 
 --- Get the bottom pixel offset of the item at the given index.
 ---
@@ -129,6 +137,7 @@ function VirtualList:getItemBottom(index)
     return index * self.itemHeight
 end
 
+
 --- Returns the pixel offset of the given item from the top of the viewport.
 ---
 ---@param index number
@@ -137,6 +146,7 @@ function VirtualList:getItemViewportOffset(index)
     local contentContainer = self:getContentContainer()
     return self:getItemTop(index) + contentContainer.props.position.y
 end
+
 
 --
 -- Viewport & index bounds
@@ -149,6 +159,7 @@ function VirtualList:getVisibleHeight()
     return self.element.layout.props.size.y - styles.VIEWPORT_INSET
 end
 
+
 --- Get the first valid item index.
 ---
 ---@return number
@@ -156,12 +167,14 @@ function VirtualList:getFirstIndex()
     return 1
 end
 
+
 --- Get the last valid item index.
 ---
 ---@return number
 function VirtualList:getLastIndex()
     return self.itemCount
 end
+
 
 --- Get the index of the item that is on the next page from the given index.
 ---
@@ -183,6 +196,7 @@ function VirtualList:getNextPageIndex(from, mode)
     error("Invalid page mode: " .. tostring(mode))
 end
 
+
 --
 -- Scroll position
 --
@@ -195,6 +209,7 @@ function VirtualList:getScrollOffset()
     return self.currentY * self:getMaxScrollDistance()
 end
 
+
 --- Returns the maximum logical scroll distance in pixels. Zero (or negative)
 --  when all content fits in the viewport.
 ---
@@ -202,6 +217,7 @@ end
 function VirtualList:getMaxScrollDistance()
     return self.itemCount * self.itemHeight - self:getVisibleHeight()
 end
+
 
 --
 -- Visibility queries
@@ -217,6 +233,7 @@ function VirtualList:getFirstVisibleIndex()
     return math.max(1, firstVisible)
 end
 
+
 --- Get the index of the last visible item based on the current scroll position.
 ---
 ---@return number
@@ -228,6 +245,7 @@ function VirtualList:getLastVisibleIndex()
     return math.min(self.itemCount, lastVisible)
 end
 
+
 --- Check whether the item at the given index is fully within the viewport.
 ---
 ---@param index number
@@ -237,6 +255,7 @@ function VirtualList:isItemFullyVisible(index)
     local viewBottom = scrollOffset + self:getVisibleHeight()
     return self:getItemTop(index) >= scrollOffset and self:getItemBottom(index) <= viewBottom
 end
+
 
 --- Calculate visible range based on current scroll Y.
 ---
@@ -277,6 +296,7 @@ function VirtualList:calcVisibleRange()
     return { start = startIndex, stop = stopIndex }
 end
 
+
 --- Get the currently visible range of item indices.
 ---
 ---@package
@@ -287,6 +307,7 @@ function VirtualList:getVisibleRange()
     end
     return self.visibleRange
 end
+
 
 --
 -- Item content (layout slot management)
@@ -308,6 +329,7 @@ function VirtualList:getIndexForSlot(slot, range)
     end
 end
 
+
 --- Applies size and position propertiess on the user-provided item layout.
 ---
 ---@package
@@ -317,6 +339,7 @@ function VirtualList:applyItemProps(layout, index)
     layout.props.size = util.vector2(self.itemWidth, self.itemHeight)
     layout.props.position = util.vector2(0, self:getItemTop(index))
 end
+
 
 --- Get the layout of the item at the given index.
 ---
@@ -339,12 +362,11 @@ function VirtualList:getItemLayout(index)
         return
     end
 
-    -- FIX: use range-relative slot instead of modulo
-    local slot = index - range.start + 1
-
+    local slot = (index - 1) % len + 1
     local content = self:getContent()
     return content[slot]
 end
+
 
 --
 -- Scroll actions
@@ -367,6 +389,7 @@ function VirtualList:rebuildAndScroll(newCount, oldIndex, newIndex)
 
     return newIndex
 end
+
 
 --- Scroll the given index into view, aligning it according to `mode`.
 ---
@@ -415,6 +438,7 @@ function VirtualList:scrollToIndex(index, mode)
     self:applyScrollPosition()
 end
 
+
 --- Applies the current scroll position to the content container and scrollbar handle,
 --- then triggers a visible-items refresh.
 ---
@@ -431,6 +455,7 @@ function VirtualList:applyScrollPosition()
     self:syncVisibleItems()
     self.element:update()
 end
+
 
 --- Handles scroll events, updating the visible items as necessary.
 ---
@@ -454,6 +479,7 @@ function VirtualList:syncVisibleItems()
     local len = oldRange.stop - oldRange.start + 1
 
     for i = 1, len do
+        local oldIndex = self:getIndexForSlot(i, oldRange)
         local newIndex = self:getIndexForSlot(i, newRange)
         if oldIndex ~= newIndex then
             local oldContent = contentsParent[i]
@@ -466,15 +492,6 @@ function VirtualList:syncVisibleItems()
     end
 end
 
-function VirtualList:redraw()
-    local contentsParent = self:getContent()
-    for i = 1, self:getLastIndex() do
-        local newContent = self.itemLayout(i, self)
-        self:applyItemProps(newContent, i)
-        contentsParent[i] = newContent
-    end
-    self.element:update()
-end
 
 --- Handles scroll button presses, updating the scroll position accordingly.
 ---
@@ -508,6 +525,7 @@ function VirtualList:applyScrollStep(direction, mode)
     self:applyScrollPosition()
 end
 
+
 --
 -- Scrollbar
 --
@@ -525,6 +543,7 @@ function VirtualList:calcScrollbarSize()
     return util.vector2(styles.SCROLL_BAR_TRACK_WIDTH, listHeight - combinedHeight)
 end
 
+
 ---@package
 ---@return Vector2
 function VirtualList:calcScrollbarHandleSize(scrollbarHeight)
@@ -535,6 +554,7 @@ function VirtualList:calcScrollbarHandleSize(scrollbarHeight)
     local clampedHeight = util.clamp(handleHeight, styles.SCROLL_HANDLE_MIN_HEIGHT, maxHandleHeight)
     return util.vector2(styles.SCROLL_BAR_HANDLE_WIDTH, clampedHeight)
 end
+
 
 --- Get scrollbar context: the travel limit, handle element, and scrollbar element.
 ---
@@ -557,6 +577,7 @@ function VirtualList:getScrollbarContext()
     return handleMaxY, handle, scrollbar
 end
 
+
 ---@package
 ---@param element Layout?
 function VirtualList:setScrollbarContainer(element)
@@ -567,6 +588,7 @@ function VirtualList:setScrollbarContainer(element)
         content:add(element)
     end
 end
+
 
 --- Handles a shift-click on the scrollbar track, jumping to the clicked position.
 ---
@@ -584,6 +606,7 @@ function VirtualList:onScrollbarJump(offsetY)
 
     self:applyScrollPosition()
 end
+
 
 --- Handles a mouse-drag on the scrollbar handle, moving it by `delta` pixels.
 ---
@@ -615,6 +638,7 @@ function VirtualList:onScrollbarDrag(delta)
 
     return true
 end
+
 
 ---@package
 function VirtualList:createScrollbar()
@@ -770,6 +794,7 @@ function VirtualList:createScrollbar()
     self:setScrollbarContainer(scrollbarContainer)
 end
 
+
 --
 -- Rebuild
 --
@@ -830,6 +855,7 @@ function VirtualList:rebuild(newItemCount, newItemHeight)
     self:scrollToIndex(1, "top")
     self.element:update()
 end
+
 
 -- We need to embed the types for the whole Element->Layout->UserData chain so
 -- that LLS understands it.
@@ -914,6 +940,7 @@ function VirtualList.create(params)
     return scrollData
 end
 
+
 --- Returns a `onMouseWheel` event handler function that implements mouse wheel
 --  scrolling.
 ---
@@ -927,5 +954,6 @@ function VirtualList.getMouseWheelHandler()
         end
     end
 end
+
 
 return VirtualList

@@ -45,6 +45,7 @@ local localization = core.l10n(MOD_NAME)
 ---@field name string
 ---@field icon string
 ---@field id string
+---@field effects MagicEffectWithParams[]
 
 ---@class IngredientInfo
 ---@field record IngredientRecord

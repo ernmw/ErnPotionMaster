@@ -126,5 +126,7 @@ return {
     },
     PotionReviewIconSize     = scaleUI(util.vector2(64, 64)),
     ButtonSize               = util.vector2(80, 20),
-    StickDeadzone            = 0.3
+    StickDeadzone            = 0.3,
+    ScrollListPaneSize       = scaleUI(util.vector2(256, 576)),
+    ScrollListItemSize       = scaleUI(util.vector2(256, 32)),
 }

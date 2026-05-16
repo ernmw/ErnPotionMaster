@@ -65,6 +65,27 @@ local function getMagicEffectsFromIngredients(ingredientRecords)
     return outEffects
 end
 
+---@param ingredients ActualizedIngredient[]
+---@return MagicEffectWithParams[]
+local function getSharedMagicEffectsFromActualizedIngredients(ingredients)
+    local onceEffects = {}
+    local outEffects = {}
+    for _, ingred in ipairs(ingredients) do
+        for idx, effectParam in ipairs(ingred.record.effects) do
+            if not search.contains(onceEffects,
+                    function(a) return magicEffectsEqual(a, effectParam) end) then
+                table.insert(onceEffects, effectParam)
+            elseif not search.contains(outEffects,
+                    function(a) return magicEffectsEqual(a, effectParam) end) then
+                table.insert(outEffects, effectParam)
+            end
+        end
+    end
+
+    table.sort(outEffects, magicEffectSortFn)
+    return outEffects
+end
+
 ---@class ActualizedIngredient: IngredientInfo
 ---@field objects table[] actual objects of this type
 
@@ -158,6 +179,7 @@ return {
     magicEffectsEqual = magicEffectsEqual,
     magicEffectSortFn = magicEffectSortFn,
     getMagicEffectsFromIngredients = getMagicEffectsFromIngredients,
+    getSharedMagicEffectsFromActualizedIngredients = getSharedMagicEffectsFromActualizedIngredients,
     getAllIngredients = getAllIngredients,
     decrementItems = decrementItems,
 }

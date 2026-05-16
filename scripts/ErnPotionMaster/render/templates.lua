@@ -84,11 +84,9 @@ local function effectNumbersLayout(mewp, textColor)
     }
 end
 
----comment
 ---@param mewp MagicEffectWithParams
----@param textColor Color?
----@return table
-local function effectLayout(mewp, textColor)
+---@protected string
+local function effectToString(mewp)
     local text
     if mewp.affectedAttribute then
         text = localization("effectWithParam", {
@@ -103,7 +101,14 @@ local function effectLayout(mewp, textColor)
     else
         text = mewp.effect.name
     end
+    return text
+end
 
+---comment
+---@param mewp MagicEffectWithParams
+---@param textColor Color?
+---@return table
+local function effectLayout(mewp, textColor)
     return {
         type = ui.TYPE.Flex,
         props = {
@@ -131,7 +136,7 @@ local function effectLayout(mewp, textColor)
                 --template = interfaces.MWUI.templates.textHeader,
                 type = ui.TYPE.Text,
                 props = {
-                    text = text,
+                    text = effectToString(mewp),
                     textColor = textColor or myui.interactiveTextColors.normal.default,
                     textAlignV = ui.ALIGNMENT.Start,
                     textAlignH = ui.ALIGNMENT.Start,
@@ -223,5 +228,6 @@ return {
         [const.ToolClass.RETORT] = ui.texture {
             path = "textures\\ErnPotionMaster\\triangle.png"
         }
-    }
+    },
+    effectToString = effectToString,
 }

@@ -82,6 +82,7 @@ local SelectionStateTransitions = {
             window.state = SelectionStateClass.INGREDIENT_2_SELECTION
         end,
         backward = function(window)
+            -- TODO: clear ingred 1, ingred 2, and batch
             window.state = SelectionStateClass.PRIMARY_EFFECT_SELECTION
         end
     },
@@ -91,6 +92,7 @@ local SelectionStateTransitions = {
             window.state = SelectionStateClass.BATCH_AMOUNT_SELECTION
         end,
         backward = function(window)
+            -- TODO: clear ingred 2 and batch
             window.state = SelectionStateClass.INGREDIENT_1_SELECTION
         end
     },
@@ -112,7 +114,12 @@ local SelectionStateTransitions = {
 ---@field _brewCallback fun(data) start up another shot with current ingredients
 ---@field _cancelButtonElement any
 ---@field _brewButtonElement any
----@field batchSize number
+---@field availableIngredients ActualizedIngredient[] this is ALL ingredients, unfiltered.
+---@field primaryEffect MagicEffectWithParams? this is the list of effects available to the player. only effects that are shared by at least two different ingredients show up in the list.
+---@field filteredIngredients ActualizedIngredient[] this is a subset of availableIngredients. it has only ingredients in which one effect is the primaryEffect.
+---@field ingredient1Index number? this is an index into filteredIngredients
+---@field ingredient2Index number? this is an index into filteredIngredients. it's not allowed to equal ingredient1Index.
+---@field batchSize number this is the batch size. the max value for this is the minimum of ingredient 1 and ingredient 2 counts.
 ---@field _keys table
 ---@field state SelectionStateClass
 --- TODO: add fields for UI scrollbar stuff
@@ -255,10 +262,18 @@ function SelectionWindow.new(record, count, cancelCallback, brewCallback)
         _brewCallback        = brewCallback,
         _cancelButtonElement = ui.create {},
         _brewButtonElement   = ui.create {},
-        _keys                = newKeys()
+        _keys                = newKeys(),
+        availableIngredients = {},
     }, SelectionWindow)
     self:_updateCancelButtonElement()
     self:_updateBrewButtonElement()
+
+
+    --- TODO: grab all nearby inventories
+    local inventories = { pself.type.inventory(pself) }
+
+    self.availableIngredients = common.getAllIngredients(inventories)
+
     self.window = ui.create(self:_getLayout(0))
     return self
 end

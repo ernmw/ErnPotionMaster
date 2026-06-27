@@ -79,6 +79,22 @@ local play             = nil
 local doneWindow       = nil
 
 ------------------------------------------------------------------------
+-- Re-entrancy guard for startPlay()
+------------------------------------------------------------------------
+
+-- startPlay() decrements ingredients and then constructs a PlayWindow.
+-- onFrame() calls startPlay() again on every tick where `play` is still
+-- nil -- which used to include the tick(s) right after a crash *inside*
+-- playwindow.new(), since `play` never got assigned. That caused the same
+-- ingredients to be decremented (and the same crash to fire) repeatedly,
+-- once per frame, until stock ran out. This flag makes a single attempt
+-- atomic from onFrame's point of view: it's set before doing anything
+-- destructive and cleared only once we know the outcome (success or a
+-- definitive failure), so a re-entrant call during that window is a no-op
+-- instead of a repeat of the same work.
+local startingPlay     = false
+
+------------------------------------------------------------------------
 -- Helpers
 ------------------------------------------------------------------------
 
@@ -96,6 +112,7 @@ local function onStopAlchemy()
     end
 
     pendingBrewData = nil
+    startingPlay    = false
 
     settings.debugPrint("removemode: alchemy")
     interfaces.UI.removeMode("Alchemy")
@@ -108,14 +125,25 @@ end
 
 --- Consume pendingBrewData to decrement ingredient stacks and spin up
 --- a PlayWindow.  Returns false (and calls onStopAlchemy) if ingredients
---- are no longer available.
+--- are no longer available, or if the PlayWindow itself fails to
+--- construct.
 ---@return boolean  success
 local function startPlay()
+    if startingPlay then
+        -- Re-entrant call from the same or a subsequent onFrame tick while
+        -- a previous attempt is still being resolved. Do nothing instead
+        -- of repeating the decrement/construct work.
+        settings.debugPrint("startPlay: already in progress; ignoring re-entrant call")
+        return false
+    end
+
     if not pendingBrewData then
         settings.debugPrint("startPlay: no pendingBrewData")
         onStopAlchemy()
         return false
     end
+
+    startingPlay    = true
 
     local brew      = pendingBrewData
     local batchSize = brew.batchSize
@@ -131,24 +159,10 @@ local function startPlay()
 
     if not hasEnough(brew.ingredient1) or not hasEnough(brew.ingredient2) then
         settings.debugPrint("startPlay: not enough ingredients")
+        startingPlay = false
         onStopAlchemy()
         return false
     end
-
-    -- Decrement both ingredient stacks.
-    core.sendGlobalEvent(MOD_NAME .. 'onDecrementItems', {
-        items  = brew.ingredient1.objects,
-        amount = batchSize,
-    })
-    core.sendGlobalEvent(MOD_NAME .. 'onDecrementItems', {
-        items  = brew.ingredient2.objects,
-        amount = batchSize,
-    })
-
-    -- Fix the counts for rendering inside the play window
-    -- (actual object counts may have changed by the time the window reads them).
-    brew.ingredient1.count = batchSize
-    brew.ingredient2.count = batchSize
 
     -- TODO: read actual tool strengths from player inventory.
     local toolStrengths = {
@@ -158,8 +172,30 @@ local function startPlay()
         [const.ToolClass.RETORT]     = 1,
     }
 
-    play = playwindow.new({
-        ingredientInfos = { brew.ingredient1, brew.ingredient2 },
+    -- Build local copies of the ingredient info with the count fixed to
+    -- batchSize for rendering inside the play window (actual object counts
+    -- may have changed by the time the window reads them). Plain shallow
+    -- copies -- not proxies -- so anything that iterates these tables with
+    -- pairs() (e.g. debug logging) sees the same fields a normal
+    -- ActualizedIngredient would have.
+    local function withCount(ing, count)
+        local copy = {}
+        for k, v in pairs(ing) do
+            copy[k] = v
+        end
+        copy.count = count
+        return copy
+    end
+    local ingredient1 = withCount(brew.ingredient1, batchSize)
+    local ingredient2 = withCount(brew.ingredient2, batchSize)
+
+    -- Construct the play window BEFORE touching the player's inventory.
+    -- playwindow.new can fail (see ingredientinfo.lua's debug-print crash,
+    -- if that hasn't been patched yet) -- pcall turns that into a single,
+    -- definitive failure instead of a partially-applied state that
+    -- onFrame retries next tick.
+    local ok, result = pcall(playwindow.new, {
+        ingredientInfos = { ingredient1, ingredient2 },
         toolStrengths   = toolStrengths,
         desiredEffect   = brew.primaryEffect,
         doneCallback    = function(data)
@@ -168,6 +204,28 @@ local function startPlay()
         end,
     })
 
+    if not ok then
+        settings.debugPrint("startPlay: playwindow.new failed: " .. tostring(result))
+        startingPlay = false
+        onStopAlchemy()
+        return false
+    end
+
+    -- Construction succeeded -- now it's safe to actually remove the
+    -- ingredients from the player's inventory.
+    core.sendGlobalEvent(MOD_NAME .. 'onDecrementItems', {
+        items  = brew.ingredient1.objects,
+        amount = batchSize,
+    })
+    core.sendGlobalEvent(MOD_NAME .. 'onDecrementItems', {
+        items  = brew.ingredient2.objects,
+        amount = batchSize,
+    })
+    brew.ingredient1.count = batchSize
+    brew.ingredient2.count = batchSize
+
+    play                   = result
+    startingPlay           = false
     return true
 end
 

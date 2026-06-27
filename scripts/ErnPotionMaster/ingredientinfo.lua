@@ -206,7 +206,17 @@ function IngredientInfoContainer.new(initial)
 
     self._dirty = false
     local layout = self:_layout()
-    settings.debugPrint(aux_util.deepToString(layout, 3))
+    -- NOTE: do not deepToString/debug-print `layout` here. It's a live UI
+    -- layout tree (ui.content(...) entries, event closures, userData), and
+    -- aux_util.deepToString's generic table walker isn't safe against that
+    -- shape -- it throws "attempt to perform arithmetic on local 'index'
+    -- (a nil value)" partway through, which previously aborted this
+    -- constructor (and, by extension, playwindow.new) entirely. The
+    -- deepToString call also ran unconditionally, before settings.debugPrint
+    -- even checked debugMode, so it paid that cost/risk on every call
+    -- regardless of whether debug logging was actually wanted. If you need
+    -- to inspect `self.ingredients` for debugging, log that table directly
+    -- instead of the rendered layout.
     self.element = ui.create(layout)
 
     return self

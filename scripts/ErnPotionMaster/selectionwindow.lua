@@ -29,6 +29,49 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 --
 -- State machine: PRIMARY_EFFECT_SELECTION → INGREDIENT_1_SELECTION
 --                → INGREDIENT_2_SELECTION → BATCH_AMOUNT_SELECTION
+--
+-- ARCHITECTURE NOTE (cascade rebuilds):
+-- Each column has exactly one "selection setter" (_setPrimaryEffect,
+-- _setIngredient1, _setIngredient2) that is the ONLY thing allowed to
+-- change that column's selection. Every input path -- mouse click,
+-- keyboard/controller confirm, and Up/Down scrolling -- funnels through
+-- these setters instead of poking the VirtualListExt or the index fields
+-- directly. Each setter is solely responsible for rebuilding everything
+-- downstream of its own column (and only its own column), so there is
+-- exactly one place that does that work, instead of it being split
+-- between click handlers and the forward/backward state-transition table
+-- (which previously caused double rebuilds on mouse clicks and NO rebuild
+-- at all when navigating with the keyboard/controller, since scrolling
+-- used to bypass the setters and write directly into the list widget).
+--
+-- behavior being preserved:
+-- 1. selected an effect like Water Walking. This populates the 1st ingredient column.
+-- 2. select a different effect like Resist Poison. This clears and re-calculates the 1st ingredient column.
+-- 3. selected a 1st ingredient like Scales. This populates the 2nd ingredient column, but Scales is
+--    missing from it because it is currently selected. so only Sload Soap is listed.
+-- 4. go back and select Sload Soap for the 1st ingredient. This re-calculates the 2nd ingredient
+--    column so only Scales is present now.
+-- 5. go back and select a totally different primary effect. This clears out the 2nd ingredient
+--    column and replaces the 1st ingredient column with the next batch of ingredients for that effect.
+
+-- NOTE ON THE "batch of 3" crash (out of scope for this file):
+-- The log you shared shows startPlay() in alchemy.lua re-decrementing the same batch and
+-- re-constructing PlayWindow three times in a row. That isn't caused by selectionwindow.lua --
+-- by the time _doBrew() fires here, the correct single BrewData table (one effect, two distinct
+-- ingredients, one batch size) has already been handed off exactly once. The actual crash is
+-- "attempt to perform arithmetic on local 'index' (a nil value)" inside aux_util.deepToString,
+-- called from IngredientInfoContainer.new (ingredientinfo.lua:209) by way of
+-- playwindow.lua:600's _init. Because that throw happens *after* alchemy.lua's startPlay() has
+-- already sent onDecrementItems for both ingredients, and startPlay() has no guard against being
+-- re-entered after a failed/partial attempt, onFrame() just calls startPlay() again next tick
+-- (since `play` was never assigned), decrementing and crashing again -- three times, until the
+-- stock runs out. Two independent fixes are needed outside this file:
+--   1. ingredientinfo.lua / playwindow.lua: stop deep-printing the live UI layout table (it
+--      contains userdata the aux util's generic table walker can't index), or guard the print.
+--   2. alchemy.lua: make startPlay() idempotent/guarded (e.g. flip a flag, or only decrement
+--      ingredients once playwindow.new() has succeeded) so a downstream crash can't cause
+--      the same brew to be re-applied on the next frame.
+-- Happy to patch those two files as well if you'd like -- just say so.
 
 local MOD_NAME                  = require("scripts.ErnPotionMaster.ns")
 local const                     = require("scripts.ErnPotionMaster.const")
@@ -70,6 +113,16 @@ local SelectionStateClass       = {
     BATCH_AMOUNT_SELECTION   = 4,
 }
 
+-- Transitions only move `state` forward/back and clear out state that
+-- belongs to panes being abandoned. They deliberately do NOT rebuild any
+-- lists -- that's the job of the per-column selection setters
+-- (_setPrimaryEffect / _setIngredient1 / _setIngredient2), which run
+-- whenever a selection is made (by mouse, keyboard, or controller) and
+-- are the single source of truth for "what changed, so what must rebuild".
+-- By the time `forward` runs, the current pane's setter has already
+-- built everything downstream; by the time `backward` runs, we just
+-- need to clear the panes we're leaving so they don't show stale data.
+
 ---@class SelectionStateMethods
 ---@field forward  fun(window: SelectionWindow)
 ---@field backward fun(window: SelectionWindow)
@@ -79,8 +132,6 @@ local SelectionStateTransitions = {
     PRIMARY_EFFECT_SELECTION = {
         forward = function(window)
             settings.debugPrint("advance to INGREDIENT_1_SELECTION")
-            -- Re-build ingredient 1 list now that we know the effect.
-            window:_rebuildIngredient1List()
             window.state = SelectionStateClass.INGREDIENT_1_SELECTION
         end,
         backward = function(window)
@@ -90,19 +141,11 @@ local SelectionStateTransitions = {
     INGREDIENT_1_SELECTION = {
         forward = function(window)
             settings.debugPrint("advance to INGREDIENT_2_SELECTION")
-            -- Re-build ingredient 2 list now that we know ingredient 1.
-            window:_rebuildIngredient2List()
             window.state = SelectionStateClass.INGREDIENT_2_SELECTION
         end,
         backward = function(window)
-            -- Clear ingredient 1, ingredient 2, and batch.
-            window.ingredient1Index = nil
-            window.ingredient2Index = nil
-            window.batchSize        = 1
-            window._batchIndex      = 1
-            window._batchOptions    = {}
-            window.scrollListIngredient1:changeSelection(nil)
-            window.scrollListIngredient2:changeSelection(nil)
+            -- Leaving ingredient-1 entirely: clear ingredient 1, ingredient 2, and batch.
+            window:_clearIngredient1(true)
             window.state = SelectionStateClass.PRIMARY_EFFECT_SELECTION
         end
     },
@@ -113,12 +156,8 @@ local SelectionStateTransitions = {
             window.state = SelectionStateClass.BATCH_AMOUNT_SELECTION
         end,
         backward = function(window)
-            -- Clear ingredient 2 and batch.
-            window.ingredient2Index = nil
-            window.batchSize        = 1
-            window._batchIndex      = 1
-            window._batchOptions    = {}
-            window.scrollListIngredient2:changeSelection(nil)
+            -- Leaving ingredient-2: clear ingredient 2 and batch.
+            window:_clearIngredient2(true)
             window.state = SelectionStateClass.INGREDIENT_1_SELECTION
         end
     },
@@ -150,11 +189,13 @@ local SelectionStateTransitions = {
 ---@field availableIngredients    ActualizedIngredient[] ALL ingredients, unfiltered
 ---@field primaryEffects          MagicEffectWithParams[] effects shared by ≥2 different ingredients
 ---@field filteredIngredients     ActualizedIngredient[] ingredients that carry the chosen primary effect
+---@field effectIndex             number?  index into primaryEffects
 ---@field ingredient1Index        number?  index into filteredIngredients
 ---@field ingredient2Index        number?  index into filteredIngredients (≠ ingredient1Index)
 ---@field batchSize               number   current batch size value
 ---@field _batchOptions           number[] list of valid batch sizes (e.g. {1,2,3,4,5})
 ---@field _batchIndex             number   1-based index into _batchOptions
+---@field _brewed                 boolean  true once _doBrew has fired for the current selection
 ---@field _keys                   table
 ---@field state                   SelectionStateClass
 
@@ -222,6 +263,21 @@ local function activeList(self)
     end
 end
 
+--- Routes a newly-highlighted index in the active pane through the
+--- column's single selection setter, so keyboard/controller scrolling
+--- rebuilds downstream columns exactly the same way a mouse click does.
+---@param self SelectionWindow
+---@param index number
+local function setActiveSelection(self, index)
+    if self.state == SelectionStateClass.PRIMARY_EFFECT_SELECTION then
+        self:_setPrimaryEffect(index)
+    elseif self.state == SelectionStateClass.INGREDIENT_1_SELECTION then
+        self:_setIngredient1(index)
+    elseif self.state == SelectionStateClass.INGREDIENT_2_SELECTION then
+        self:_setIngredient2(index)
+    end
+end
+
 --- Scroll the active list one step up or down.
 --- No-ops on the batch pane (which uses left/right, not up/down).
 ---@param self SelectionWindow
@@ -236,6 +292,16 @@ local function scrollActiveList(self, direction)
     local first      = scrollData:getFirstIndex()
     local last       = scrollData:getLastIndex()
 
+    -- On the ingredient-2 pane, the row matching ingredient1Index is a
+    -- disabled placeholder (see buildIngredient2List) and must never become
+    -- the selection: if the cursor landed on it, it could never move again
+    -- (it can't be confirmed via _setIngredient2, so the next press would
+    -- recompute the exact same blocked index forever).
+    local function isBlocked(index)
+        return self.state == SelectionStateClass.INGREDIENT_2_SELECTION
+            and index == self.ingredient1Index
+    end
+
     local newIndex
     if current == nil then
         newIndex = (direction > 0) and first or last
@@ -245,9 +311,29 @@ local function scrollActiveList(self, direction)
         if newIndex > last then newIndex = last end
     end
 
+    -- Step past the blocked row in the direction of travel; if that runs
+    -- off the end of the list, step back the other way instead (covers the
+    -- edge case where the blocked row is the first/last visible item).
+    if isBlocked(newIndex) then
+        local skipped = newIndex + direction
+        if skipped < first or skipped > last then
+            skipped = newIndex - direction
+        end
+        newIndex = skipped
+    end
+
+    -- Nowhere valid to land (e.g. only one ingredient shares the effect,
+    -- and it's already ingredient1) -- leave the selection unchanged.
+    if newIndex < first or newIndex > last or isBlocked(newIndex) then
+        return
+    end
+
     if newIndex ~= current then
         ambient.playSound("menu click")
-        list:changeSelection(newIndex)
+        -- Route through the column's setter (not list:changeSelection directly)
+        -- so downstream columns rebuild immediately as the player scrolls,
+        -- not only once they press Right/A to confirm.
+        setActiveSelection(self, newIndex)
         if direction < 0 then
             scrollData:scrollToIndex(newIndex, "top")
         else
@@ -261,7 +347,7 @@ end
 ---@return boolean
 local function currentPaneHasSelection(self)
     if self.state == SelectionStateClass.PRIMARY_EFFECT_SELECTION then
-        return self.scrollListEffects:getSelectedIndex() ~= nil
+        return self.effectIndex ~= nil
     elseif self.state == SelectionStateClass.INGREDIENT_1_SELECTION then
         return self.ingredient1Index ~= nil
     elseif self.state == SelectionStateClass.INGREDIENT_2_SELECTION then
@@ -278,9 +364,8 @@ end
 local function buildSummaryText(self)
     local parts = {}
 
-    local effectIdx = self.scrollListEffects:getSelectedIndex()
-    if effectIdx then
-        local eff = self.primaryEffects[effectIdx]
+    if self.effectIndex then
+        local eff = self.primaryEffects[self.effectIndex]
         table.insert(parts, localization("effectLabel", {}) .. ": " .. templates.effectToString(eff))
     end
 
@@ -308,7 +393,12 @@ end
 
 ------------------------------------------------------------------------
 -- List (re)builders
--- These are called lazily as the player advances through states.
+--
+-- Each builder constructs ONE column's VirtualListExt. They never decide
+-- *when* to rebuild anything but their own column -- that decision lives
+-- in the selection setters below. A builder may be called more than once
+-- per column's lifetime (every time an upstream column's selection
+-- changes), which is why each one is idempotent and self-contained.
 ------------------------------------------------------------------------
 
 --- Create the scrollListEffects list.  Called once during construction.
@@ -342,30 +432,9 @@ local function buildEffectList(self)
 end
 
 --- (Re)build the ingredient-1 list filtered by the currently selected effect.
---- Called when advancing from PRIMARY_EFFECT_SELECTION.
-function SelectionWindow:_rebuildIngredient1List()
-    local effectIdx = self.scrollListEffects:getSelectedIndex()
-    if not effectIdx then
-        self.filteredIngredients = {}
-    else
-        local chosenEffect = self.primaryEffects[effectIdx]
-        -- Keep only ingredients that carry this effect.
-        self.filteredIngredients = {}
-        for _, ing in ipairs(self.availableIngredients) do
-            for _, mewp in ipairs(ing.record.effects) do
-                if common.magicEffectsEqual(mewp, chosenEffect) then
-                    table.insert(self.filteredIngredients, ing)
-                    break
-                end
-            end
-        end
-    end
-
-    -- Reset downstream selections.
-    self.ingredient1Index      = nil
-    self.ingredient2Index      = nil
-    self.batchSize             = 1
-
+--- Called only from _setPrimaryEffect.
+---@param self SelectionWindow
+local function buildIngredient1List(self)
     self.scrollListIngredient1 = virtualListExtras.VirtualListExt.create({
         viewportSize = const.ScrollListPaneSize,
         itemSize     = const.ScrollListItemSize,
@@ -377,8 +446,7 @@ function SelectionWindow:_rebuildIngredient1List()
                 props = { text = ing.record.name .. " (x" .. tostring(ing.count) .. ")" },
                 onMousePress = function(e, layout)
                     if e.button == 1 then
-                        list:changeSelection(i)
-                        self.ingredient1Index = i
+                        self:_setIngredient1(i)
                         if self.state == SelectionStateClass.INGREDIENT_1_SELECTION then
                             SelectionStateTransitions.INGREDIENT_1_SELECTION.forward(self)
                         end
@@ -389,20 +457,16 @@ function SelectionWindow:_rebuildIngredient1List()
     })
     self.scrollListIngredient1:setKeyPressHandler({
         setSelectedIndex = function(i)
-            self.scrollListIngredient1:changeSelection(i)
             self:_setIngredient1(i)
         end,
     })
 end
 
 --- (Re)build the ingredient-2 list, excluding the ingredient-1 choice.
---- Called when advancing from INGREDIENT_1_SELECTION.
-function SelectionWindow:_rebuildIngredient2List()
-    -- ingredient2 list is the same filteredIngredients but we disallow the same
-    -- index as ingredient1.
-    self.ingredient2Index      = nil
-    self.batchSize             = 1
-
+--- Called only from _setIngredient1 (and from the PRIMARY_EFFECT_SELECTION
+--- rebuild path, where it produces an empty list since ingredient1Index is nil).
+---@param self SelectionWindow
+local function buildIngredient2List(self)
     self.scrollListIngredient2 = virtualListExtras.VirtualListExt.create({
         viewportSize = const.ScrollListPaneSize,
         itemSize     = const.ScrollListItemSize,
@@ -421,8 +485,7 @@ function SelectionWindow:_rebuildIngredient2List()
                 props = { text = label },
                 onMousePress = function(e, layout)
                     if e.button == 1 and i ~= self.ingredient1Index then
-                        list:changeSelection(i)
-                        self.ingredient2Index = i
+                        self:_setIngredient2(i)
                         if self.state == SelectionStateClass.INGREDIENT_2_SELECTION then
                             SelectionStateTransitions.INGREDIENT_2_SELECTION.forward(self)
                         end
@@ -435,59 +498,132 @@ function SelectionWindow:_rebuildIngredient2List()
         setSelectedIndex = function(i)
             -- Skip the ingredient-1 slot.
             if i == self.ingredient1Index then return end
-            self.scrollListIngredient2:changeSelection(i)
-            self.ingredient2Index = i
+            self:_setIngredient2(i)
         end,
     })
 end
 
 ------------------------------------------------------------------------
--- Selection change helpers
+-- Selection setters
+--
+-- These are the ONLY functions allowed to change effectIndex /
+-- ingredient1Index / ingredient2Index, and the ONLY functions allowed to
+-- rebuild a column's list. Every input path (mouse, keyboard/controller
+-- confirm, Up/Down scroll) calls into one of these instead of touching
+-- the VirtualListExt or the index fields directly.
 ------------------------------------------------------------------------
+
+--- Clears ingredient 1, ingredient 2, and the batch -- used both when the
+--- primary effect changes and when navigating back out of ingredient 1.
+---@param self SelectionWindow
+---@param rebuildList boolean  also rebuild scrollListIngredient2 (false during
+---                            full effect-change rebuilds, where the caller
+---                            rebuilds ingredient2 itself right after)
+function SelectionWindow:_clearIngredient1(rebuildList)
+    self.ingredient1Index = nil
+    self:_clearIngredient2(false)
+    if self.scrollListIngredient1 then
+        self.scrollListIngredient1:changeSelection(nil)
+    end
+    if rebuildList then
+        buildIngredient2List(self)
+    end
+end
+
+--- Clears ingredient 2 and the batch -- used both when ingredient 1
+--- changes and when navigating back out of ingredient 2.
+---@param self SelectionWindow
+---@param rebuildList boolean  also rebuild scrollListIngredient2 to drop the
+---                            stale onMousePress closures (false when the
+---                            caller is about to rebuild it anyway).
+function SelectionWindow:_clearIngredient2(rebuildList)
+    self.ingredient2Index = nil
+    self.batchSize        = 1
+    self._batchIndex      = 1
+    self._batchOptions    = {}
+    self._brewed          = false
+    if self.scrollListIngredient2 then
+        self.scrollListIngredient2:changeSelection(nil)
+    end
+    if rebuildList then
+        buildIngredient2List(self)
+    end
+end
 
 ---@param self SelectionWindow
 ---@param effectIndex number
 function SelectionWindow:_setPrimaryEffect(effectIndex)
-    local current = self.scrollListEffects:getSelectedIndex()
-
-    -- No change.
-    if current == effectIndex then
+    if self.effectIndex == effectIndex then
         return
     end
 
+    self.effectIndex = effectIndex
     self.scrollListEffects:changeSelection(effectIndex)
 
-    -- Rebuild downstream state.
-    self:_rebuildIngredient1List()
-    self:_rebuildIngredient2List()
+    -- Recompute which ingredients carry this effect.
+    local chosenEffect = self.primaryEffects[effectIndex]
+    self.filteredIngredients = {}
+    for _, ing in ipairs(self.availableIngredients) do
+        for _, mewp in ipairs(ing.record.effects) do
+            if common.magicEffectsEqual(mewp, chosenEffect) then
+                table.insert(self.filteredIngredients, ing)
+                break
+            end
+        end
+    end
 
-    -- Reset batch state.
-    self.batchSize     = 1
-    self._batchIndex   = 1
-    self._batchOptions = {}
+    -- Everything downstream of the effect column is now stale: clear
+    -- ingredient 1 (which also clears ingredient 2 and the batch), then
+    -- rebuild both ingredient lists against the new filteredIngredients.
+    self.ingredient1Index = nil
+    self:_clearIngredient2(false)
+    buildIngredient1List(self)
+    buildIngredient2List(self)
 end
 
 ---@param self SelectionWindow
 ---@param ingredientIndex number
 function SelectionWindow:_setIngredient1(ingredientIndex)
-    if self.ingredient1Index == ingredientIndex then
+    if ingredientIndex == self.ingredient1Index then
         return
     end
 
     self.ingredient1Index = ingredientIndex
+    self.scrollListIngredient1:changeSelection(ingredientIndex)
 
-    -- Ingredient 2 depends on ingredient 1.
-    self:_rebuildIngredient2List()
+    -- Ingredient 2 depends on ingredient 1 (it must exclude this index,
+    -- and any prior ingredient-2 choice may now be invalid/stale).
+    self:_clearIngredient2(false)
+    buildIngredient2List(self)
+end
 
-    -- Reset batch state.
+---@param self SelectionWindow
+---@param ingredientIndex number
+function SelectionWindow:_setIngredient2(ingredientIndex)
+    if ingredientIndex == self.ingredient1Index then
+        -- Defensive: never allow ingredient 2 to match ingredient 1.
+        return
+    end
+    if ingredientIndex == self.ingredient2Index then
+        return
+    end
+
+    self.ingredient2Index = ingredientIndex
+    self.scrollListIngredient2:changeSelection(ingredientIndex)
+
+    -- Batch size depends on both ingredient counts; reset it so a stale
+    -- value can't leak in from a previous ingredient-2 choice. The actual
+    -- options list is (re)computed by _rebuildBatchList when advancing
+    -- into BATCH_AMOUNT_SELECTION.
     self.batchSize     = 1
     self._batchIndex   = 1
     self._batchOptions = {}
+    self._brewed       = false
 end
 
 --- (Re)build the batch-size options.
 --- Called when advancing from INGREDIENT_2_SELECTION.
---- No VirtualListExt — the batch pane uses a select-style widget instead.
+--- No VirtualListExt -- the batch pane uses a select-style widget instead.
 function SelectionWindow:_rebuildBatchList()
     -- Determine the maximum number of batches we can brew.
     local maxCount = MAX_BATCH
@@ -507,6 +643,7 @@ function SelectionWindow:_rebuildBatchList()
     -- Default to x1.
     self._batchIndex = 1
     self.batchSize   = self._batchOptions[1]
+    self._brewed     = false
 end
 
 ------------------------------------------------------------------------
@@ -516,7 +653,7 @@ end
 function SelectionWindow:_updateBrewButtonElement()
     -- Brew is only actionable on the last pane once options have been built.
     local isReady = (self.state == SelectionStateClass.BATCH_AMOUNT_SELECTION) and
-        (#self._batchOptions > 0)
+        (#self._batchOptions > 0) and not self._brewed
 
     local brewFn = function()
         settings.debugPrint("brew clicked")
@@ -555,20 +692,28 @@ function SelectionWindow:_updateCancelButtonElement()
 end
 
 --- Gather the BrewData and call the brew callback.
+--- Guarded by _brewed so a double-fire (e.g. a stray extra Enter/click
+--- landing before the window closes) can't hand off the same selection
+--- to alchemy.lua twice.
 function SelectionWindow:_doBrew()
+    if self._brewed then
+        settings.debugPrint("_doBrew called again; ignoring (already brewed this selection)")
+        return
+    end
     if not self.ingredient1Index or not self.ingredient2Index then
         settings.debugPrint("_doBrew called but ingredients not selected")
         return
     end
-    local effectIdx = self.scrollListEffects:getSelectedIndex()
-    if not effectIdx then
+    if not self.effectIndex then
         settings.debugPrint("_doBrew called but effect not selected")
         return
     end
 
+    self._brewed = true
+
     ---@type BrewData
     local data = {
-        primaryEffect = self.primaryEffects[effectIdx],
+        primaryEffect = self.primaryEffects[self.effectIndex],
         ingredient1   = self.filteredIngredients[self.ingredient1Index],
         ingredient2   = self.filteredIngredients[self.ingredient2Index],
         batchSize     = self.batchSize,
@@ -899,11 +1044,13 @@ function SelectionWindow.new(cancelCallback, brewCallback)
         _keys                = newKeys(),
         availableIngredients = common.getAllIngredients(inventories),
         filteredIngredients  = {},
+        effectIndex          = nil,
         ingredient1Index     = nil,
         ingredient2Index     = nil,
         batchSize            = 1,
         _batchOptions        = {},
         _batchIndex          = 1,
+        _brewed              = false,
     }, SelectionWindow)
 
     self:_updateCancelButtonElement()
@@ -913,10 +1060,11 @@ function SelectionWindow.new(cancelCallback, brewCallback)
     self.primaryEffects = common.getSharedMagicEffectsFromActualizedIngredients(self.availableIngredients)
     buildEffectList(self)
 
-    -- Build placeholder ingredient lists (empty; rebuilt when effect is chosen).
-    -- We need non-nil VirtualListExt objects so _getLayout can always call :getElement().
-    self:_rebuildIngredient1List() -- will be empty since no effect yet
-    self:_rebuildIngredient2List() -- will be empty since no ingredient1 yet
+    -- Build placeholder ingredient lists (empty; populated once an effect
+    -- is chosen via _setPrimaryEffect). We need non-nil VirtualListExt
+    -- objects so _getLayout can always call :getElement().
+    buildIngredient1List(self) -- empty: filteredIngredients is still {}
+    buildIngredient2List(self) -- empty: filteredIngredients is still {}
 
     self.window = ui.create(self:_getLayout())
     return self

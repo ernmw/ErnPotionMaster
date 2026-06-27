@@ -195,7 +195,13 @@ function EffectScoreContainer.new(initial, idxOfDesired)
 
     self._dirty = false
     local layout = self:_layout()
-    settings.debugPrint(aux_util.deepToString(layout, 3))
+    -- NOTE: do not deepToString/debug-print `layout` here -- same issue as
+    -- ingredientinfo.lua's IngredientInfoContainer.new: it's a live UI
+    -- layout tree (ui.content(...) entries, event closures, userData), and
+    -- aux_util.deepToString's generic table walker throws "attempt to
+    -- perform arithmetic on local 'index' (a nil value)" partway through
+    -- it. If you need to inspect this container while debugging, log
+    -- `self.scores` directly instead of the rendered layout.
     self.element = ui.create(layout)
 
     return self

@@ -273,12 +273,34 @@ local textColors = {
 local function createButton(parent, layout, updateColor, buttonFunction, args)
     args = args or {}
     --- these callbacks are being invoked at the wrong time
+
+    --- Several of these handlers call parent:update() after doing
+    --- something that can destroy `parent` (most notably buttonFunction()
+    --- in mouseRelease, which is exactly what a Cancel/Close button does).
+    --- The original focusLoss handler below already guards its own
+    --- parent:update() call for this reason ("This call to update can
+    --- fail if we're tearing down the window while the button still has
+    --- focus."); the same guard is needed here, or a Cancel-style button
+    --- can throw on the very update() call that's supposed to follow its
+    --- own buttonFunction(), silently aborting before
+    --- interfaces.UI.removeMode (or whatever else buttonFunction queued
+    --- up) finishes taking visible effect.
+    local function safeUpdate(eventName)
+        local success, result = pcall(parent.update, parent)
+        if not success then
+            error("Failed to update widget " .. tostring(layout.name) .. " during " .. eventName .. ": " ..
+                tostring(result))
+            --- Nuclear option.
+            --- require('openmw.debug').reloadLua()
+        end
+    end
+
     layout.events = {
         mousePress = async:callback(function(mouseEvent, data)
             if mouseEvent.button == 1 then
                 updateColor(layout, 'pressed')
                 ambient.playSound('Menu Click')
-                parent:update()
+                safeUpdate('mousePress')
             end
         end),
         mouseRelease = async:callback(function(mouseEvent, data)
@@ -286,12 +308,12 @@ local function createButton(parent, layout, updateColor, buttonFunction, args)
                 updateColor(layout, 'over')
                 --print("clicked button")
                 buttonFunction()
-                parent:update()
+                safeUpdate('mouseRelease')
             end
         end),
         focusGain = async:callback(function()
             updateColor(layout, 'over')
-            parent:update()
+            safeUpdate('focusGain')
         end),
         focusLoss = async:callback(function()
             --- This event is invoked when any parent widget becomes invisible,
@@ -302,12 +324,7 @@ local function createButton(parent, layout, updateColor, buttonFunction, args)
             updateColor(layout, 'default')
             --- This call to update can fail if we're tearing down the window
             --- while the button still has focus.
-            local success, result = pcall(parent.update, parent)
-            if not success then
-                error("Failed to update widget " .. tostring(layout.name) .. " during focusLoss: " .. tostring(result))
-                --- Nuclear option.
-                --- require('openmw.debug').reloadLua()
-            end
+            safeUpdate('focusLoss')
         end)
     }
     return layout

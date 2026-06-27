@@ -53,6 +53,7 @@ local StateClass       = {
     --- Allow a quick "do it again" button that re-runs PLAY with the same
     --- ingredients, if they are still available.
     POTION_DONE_WINDOW = 3,
+    STOPPING           = 4,
 }
 
 ---@type StateClass
@@ -99,6 +100,11 @@ local startingPlay     = false
 ------------------------------------------------------------------------
 
 local function onStopAlchemy()
+    if currentState == StateClass.STOPPING then
+        return
+    end
+    currentState = StateClass.STOPPING
+
     settings.debugPrint("stop alchemy")
 
     if selWindow then
@@ -234,12 +240,17 @@ end
 ------------------------------------------------------------------------
 
 local function onInit(data)
+    currentState = StateClass.SELECTION_WINDOW
     settings.debugPrint("start alchemy")
     -- State is already SELECTION_WINDOW; selWindow will be created on the
     -- first onFrame tick so the UI system is fully ready.
 end
 
 local function onFrame()
+    if currentState == StateClass.STOPPING then
+        return
+    end
+
     ---------- SELECTION_WINDOW ----------------------------------------
     if currentState == StateClass.SELECTION_WINDOW then
         if not selWindow then

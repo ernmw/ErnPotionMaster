@@ -325,7 +325,7 @@ local function buildEffectList(self)
                 onMousePress = function(e, layout)
                     if e.button == 1 then
                         -- Mouse click: select and immediately advance.
-                        list:changeSelection(i)
+                        self:_setPrimaryEffect(i)
                         if self.state == SelectionStateClass.PRIMARY_EFFECT_SELECTION then
                             SelectionStateTransitions.PRIMARY_EFFECT_SELECTION.forward(self)
                         end
@@ -336,7 +336,7 @@ local function buildEffectList(self)
     })
     self.scrollListEffects:setKeyPressHandler({
         setSelectedIndex = function(i)
-            self.scrollListEffects:changeSelection(i)
+            self:_setPrimaryEffect(i)
         end,
     })
 end
@@ -390,7 +390,7 @@ function SelectionWindow:_rebuildIngredient1List()
     self.scrollListIngredient1:setKeyPressHandler({
         setSelectedIndex = function(i)
             self.scrollListIngredient1:changeSelection(i)
-            self.ingredient1Index = i
+            self:_setIngredient1(i)
         end,
     })
 end
@@ -439,6 +439,50 @@ function SelectionWindow:_rebuildIngredient2List()
             self.ingredient2Index = i
         end,
     })
+end
+
+------------------------------------------------------------------------
+-- Selection change helpers
+------------------------------------------------------------------------
+
+---@param self SelectionWindow
+---@param effectIndex number
+function SelectionWindow:_setPrimaryEffect(effectIndex)
+    local current = self.scrollListEffects:getSelectedIndex()
+
+    -- No change.
+    if current == effectIndex then
+        return
+    end
+
+    self.scrollListEffects:changeSelection(effectIndex)
+
+    -- Rebuild downstream state.
+    self:_rebuildIngredient1List()
+    self:_rebuildIngredient2List()
+
+    -- Reset batch state.
+    self.batchSize     = 1
+    self._batchIndex   = 1
+    self._batchOptions = {}
+end
+
+---@param self SelectionWindow
+---@param ingredientIndex number
+function SelectionWindow:_setIngredient1(ingredientIndex)
+    if self.ingredient1Index == ingredientIndex then
+        return
+    end
+
+    self.ingredient1Index = ingredientIndex
+
+    -- Ingredient 2 depends on ingredient 1.
+    self:_rebuildIngredient2List()
+
+    -- Reset batch state.
+    self.batchSize     = 1
+    self._batchIndex   = 1
+    self._batchOptions = {}
 end
 
 --- (Re)build the batch-size options.

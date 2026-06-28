@@ -158,6 +158,7 @@ end
 ---@param item table  a GameObject of type Apparatus
 local function considerApparatus(strengths, item)
     if not item:isValid() then return end
+    if not types.Apparatus.objectIsInstance(item) then return end
     local record = types.Apparatus.record(item)
     local toolClass = toToolClass(record.type)
     if not toolClass then return end

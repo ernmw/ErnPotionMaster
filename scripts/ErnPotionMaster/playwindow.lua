@@ -636,7 +636,12 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
     local toolPinCounts = {
         [PinClass.ALEMBIC]    = math.ceil(2 * gs.toolStrengths[const.ToolClass.ALEMBIC]),
         [PinClass.CALCINATOR] = math.ceil(2 * gs.toolStrengths[const.ToolClass.CALCINATOR]),
-        [PinClass.RETORT]     = gs.toolStrengths[const.ToolClass.RETORT] and 1 or 0,
+        -- NOTE: `0 and 1 or 0` would always evaluate to 1 in Lua, since 0
+        -- is truthy -- only nil/false are falsy. A retort strength of 0
+        -- (no retort available) must be compared numerically, not used as
+        -- a boolean, or the player gets a free retort-reset pin even with
+        -- no retort in any reachable inventory.
+        [PinClass.RETORT]     = (gs.toolStrengths[const.ToolClass.RETORT] or 0) > 0 and 1 or 0,
     }
 
     local totalPins = 0

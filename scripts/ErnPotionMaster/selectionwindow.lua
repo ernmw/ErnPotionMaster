@@ -361,39 +361,6 @@ local function currentPaneHasSelection(self)
     end
 end
 
---- Build the summary text shown beneath the scroll columns.
----@param self SelectionWindow
----@return string
-local function buildSummaryText(self)
-    local parts = {}
-
-    if self.effectIndex then
-        local eff = self.primaryEffects[self.effectIndex]
-        table.insert(parts, localization("effectLabel", {}) .. ": " .. templates.effectToString(eff))
-    end
-
-    if self.ingredient1Index then
-        local ing = self.filteredIngredients[self.ingredient1Index]
-        table.insert(parts, localization("ingredient1Label", {}) .. ": " .. ing.record.name
-            .. " (x" .. tostring(ing.count) .. ")")
-    end
-
-    if self.ingredient2Index then
-        local ing = self.filteredIngredients[self.ingredient2Index]
-        table.insert(parts, localization("ingredient2Label", {}) .. ": " .. ing.record.name
-            .. " (x" .. tostring(ing.count) .. ")")
-    end
-
-    if self.state == SelectionStateClass.BATCH_AMOUNT_SELECTION then
-        table.insert(parts, localization("batchLabel", {}) .. ": " .. tostring(self.batchSize))
-    end
-
-    if #parts == 0 then
-        return localization("selectEffectHint", {})
-    end
-    return table.concat(parts, "  |  ")
-end
-
 ------------------------------------------------------------------------
 -- List (re)builders
 --
@@ -740,7 +707,7 @@ local function columnHeader(label)
         props    = {
             text      = label,
             textSize  = 14,
-            textColor = util.color.rgb(0.8, 0.8, 0.5),
+            textColor = myui.textColors.header,
         },
         external = { stretch = 1 },
     }
@@ -855,8 +822,8 @@ local function batchSelectorLayout(self)
 
     local label      = "x" .. tostring(self.batchSize)
     local labelColor = isActive
-        and util.color.rgb(1, 1, 1)
-        or util.color.rgb(0.6, 0.6, 0.6)
+        and myui.interactiveTextColors.normal.default
+        or myui.interactiveTextColors.disabled.default
 
     return {
         template = interfaces.MWUI.templates.box,
@@ -923,17 +890,27 @@ local function batchColumnLayout(self)
     return {
         type     = ui.TYPE.Flex,
         props    = {
-            horizontal = false,
+            horizontal = true,
             align      = ui.ALIGNMENT.Center,
+            arrange    = ui.ALIGNMENT.Center,
         },
-        external = { grow = 1 },
+        external = { grow = 1, stretch = 1 },
         content  = ui.content {
-            columnHeader(localization("batchColumn", {})),
-            myui.padWidget(0, const.Padding * 0.5),
+            {
+                type     = ui.TYPE.Text,
+                props    = {
+                    textAlignV = ui.ALIGNMENT.Center,
+                    text       = localization("batchColumn", {}),
+                    textSize   = 16,
+                    textColor  = myui.interactiveTextColors.normal.default,
+                },
+                external = { stretch = 1 },
+            },
+            myui.padWidget(const.Padding, const.Padding),
             batchSelectorLayout(self),
-            myui.padWidget(0, const.Padding),
+            myui.padWidget(const.Padding, const.Padding),
             self._brewButtonElement,
-            myui.padWidget(0, const.Padding * 0.5),
+            myui.padWidget(const.Padding, const.Padding),
             self._cancelButtonElement,
         },
     }
@@ -995,33 +972,13 @@ function SelectionWindow:_getLayout()
 
                             myui.padWidget(const.Padding, 0),
 
-                            -- Column 4: Batch size + buttons
-                            batchColumnLayout(self),
                         }
                     },
 
                     myui.padWidget(0, const.Padding),
 
-                    ---- Row 2: summary of current selections -------------------------
-                    {
-                        type     = ui.TYPE.Flex,
-                        props    = {
-                            horizontal = true,
-                            align      = ui.ALIGNMENT.Center,
-                            arrange    = ui.ALIGNMENT.Center,
-                        },
-                        external = { stretch = 1 },
-                        content  = ui.content {
-                            {
-                                template = interfaces.MWUI.templates.textNormal,
-                                props    = {
-                                    text             = buildSummaryText(self),
-                                    relativePosition = util.vector2(0.5, 0.5),
-                                    anchor           = util.vector2(0.5, 0.5),
-                                },
-                            }
-                        }
-                    },
+                    ---- Row 2: batch size and buttons
+                    batchColumnLayout(self),
 
                 } -- outer Flex content
             }, const.Padding)

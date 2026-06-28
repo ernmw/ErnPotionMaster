@@ -129,4 +129,10 @@ return {
     StickDeadzone            = 0.3,
     ScrollListPaneSize       = scaleUI(util.vector2(256, 576)),
     ScrollListItemSize       = scaleUI(util.vector2(256, 32)),
+    --- Max distance (game units) from the player to search for nearby
+    --- unowned containers when gathering ingredients/apparatuses.
+    --- Passed explicitly to inventorysource.lua by callers (selectionwindow.lua,
+    --- alchemy.lua) rather than being read from settings, so it's easy to
+    --- override per-call (e.g. a future "search radius" perk or spell).
+    NearbyContainerRadius    = 1500,
 }

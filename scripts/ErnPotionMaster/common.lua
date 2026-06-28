@@ -134,6 +134,47 @@ local function getAllIngredients(inventories, mewpFilter)
     return out
 end
 
+--- Re-counts how much of a specific ingredient (by record id) is
+--- currently available across the given inventories.
+---
+--- This is intentionally a *fresh* count rather than something derived
+--- from a previously-built ActualizedIngredient's `.objects` list: those
+--- objects can go stale (consumed, moved, or simply no longer reachable
+--- if the player walked away from a nearby container), so trusting them
+--- to answer "do we still have enough?" understates or overstates supply.
+--- Callers that need to know whether a brew can still happen (e.g. the
+--- potiondonewindow.lua "do it again" flow) should call this against a
+--- freshly-gathered inventory list instead of reusing old object refs.
+---@param recordId string
+---@param inventories table[]
+---@return number
+local function countAvailable(recordId, inventories)
+    local total = 0
+    for _, inventory in ipairs(inventories) do
+        total = total + inventory:countOf(recordId)
+    end
+    return total
+end
+
+--- Freshly gathers every object stack matching `recordId` across the
+--- given inventories, right now -- as opposed to reusing a previously
+--- captured ActualizedIngredient.objects list, which can go stale for the
+--- same reasons described on countAvailable above. Use this immediately
+--- before decrementing, so decrementItems always operates on objects that
+--- are actually still there.
+---@param recordId string
+---@param inventories table[]
+---@return table[]
+local function getObjectsOf(recordId, inventories)
+    local out = {}
+    for _, inventory in ipairs(inventories) do
+        for _, item in ipairs(inventory:findAll(recordId)) do
+            table.insert(out, item)
+        end
+    end
+    return out
+end
+
 ---@param items table[] actual objects of this type
 ---@param amount number
 ---@return boolean success
@@ -181,5 +222,7 @@ return {
     getMagicEffectsFromIngredients = getMagicEffectsFromIngredients,
     getSharedMagicEffectsFromActualizedIngredients = getSharedMagicEffectsFromActualizedIngredients,
     getAllIngredients = getAllIngredients,
+    countAvailable = countAvailable,
+    getObjectsOf = getObjectsOf,
     decrementItems = decrementItems,
 }

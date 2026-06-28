@@ -77,12 +77,11 @@ local MOD_NAME                  = require("scripts.ErnPotionMaster.ns")
 local const                     = require("scripts.ErnPotionMaster.const")
 local ui                        = require("openmw.ui")
 local util                      = require("openmw.util")
-local pself                     = require("openmw.self")
 local core                      = require("openmw.core")
-local types                     = require("openmw.types")
 local interfaces                = require('openmw.interfaces')
 local settings                  = require("scripts.ErnPotionMaster.settings.settings")
 local common                    = require("scripts.ErnPotionMaster.common")
+local inventorysource           = require("scripts.ErnPotionMaster.inventorysource")
 local templates                 = require("scripts.ErnPotionMaster.render.templates")
 local myui                      = require("scripts.ErnPotionMaster.pcp.myui")
 local keytrack                  = require("scripts.ErnPotionMaster.keytrack")
@@ -186,6 +185,8 @@ local SelectionStateTransitions = {
 ---@field scrollListEffects       VirtualListExt
 ---@field scrollListIngredient1   VirtualListExt
 ---@field scrollListIngredient2   VirtualListExt
+---@field inventories             table[] every inventory ingredients/apparatuses are gathered from (player + nearby unowned containers)
+---@field toolStrengths           {[ToolClass]: number} best available quality of each apparatus type, across `inventories`
 ---@field availableIngredients    ActualizedIngredient[] ALL ingredients, unfiltered
 ---@field primaryEffects          MagicEffectWithParams[] effects shared by ≥2 different ingredients
 ---@field filteredIngredients     ActualizedIngredient[] ingredients that carry the chosen primary effect
@@ -204,6 +205,8 @@ local SelectionStateTransitions = {
 ---@field ingredient1     ActualizedIngredient
 ---@field ingredient2     ActualizedIngredient
 ---@field batchSize       number
+---@field inventories     table[] every inventory these ingredients were drawn from, so availability can be re-checked later (e.g. potiondonewindow.lua's "do it again")
+---@field toolStrengths   {[ToolClass]: number} best available quality of each apparatus type at the time of brewing
 
 local SelectionWindow           = {}
 SelectionWindow.__index         = SelectionWindow
@@ -717,6 +720,8 @@ function SelectionWindow:_doBrew()
         ingredient1   = self.filteredIngredients[self.ingredient1Index],
         ingredient2   = self.filteredIngredients[self.ingredient2Index],
         batchSize     = self.batchSize,
+        inventories   = self.inventories,
+        toolStrengths = self.toolStrengths,
     }
     settings.debugPrint("brewCallback with batchSize=" .. tostring(data.batchSize))
     self._brewCallback(data)
@@ -1032,8 +1037,13 @@ end
 ---@param brewCallback   fun(data: BrewData) start up another shot with current ingredients
 ---@return SelectionWindow
 function SelectionWindow.new(cancelCallback, brewCallback)
-    -- Grab all inventories we care about (player for now; extend as desired).
-    local inventories = { pself.type.inventory(pself) }
+    -- Gather every inventory we're allowed to draw ingredients/apparatuses
+    -- from: the player's own inventory (always available, owned or not),
+    -- plus any nearby container that isn't owned (or is owned by a
+    -- faction the player has sufficient rank in). See inventorysource.lua
+    -- for the ownership rules and nearby-search radius handling.
+    local inventories = inventorysource.getInventories({ radius = const.NearbyContainerRadius })
+    local toolStrengths = inventorysource.getApparatusStrengths({ radius = const.NearbyContainerRadius })
 
     local self = setmetatable({
         state                = SelectionStateClass.PRIMARY_EFFECT_SELECTION,
@@ -1042,6 +1052,8 @@ function SelectionWindow.new(cancelCallback, brewCallback)
         _cancelButtonElement = ui.create {},
         _brewButtonElement   = ui.create {},
         _keys                = newKeys(),
+        inventories          = inventories,
+        toolStrengths        = toolStrengths,
         availableIngredients = common.getAllIngredients(inventories),
         filteredIngredients  = {},
         effectIndex          = nil,

@@ -129,6 +129,23 @@ local function onStopAlchemy()
     })
 end
 
+-- Validate that an ingredient still has enough stock available across the
+-- inventories it was originally gathered from.
+--
+-- This re-counts live, by record id, instead of trusting the `.objects`
+-- list captured back in selectionwindow.lua: those object references can
+-- go stale (consumed elsewhere, or simply no longer reachable if the
+-- player walked away from a nearby container they were borrowing from),
+-- so checking their `:isValid()`/`.count` directly could under- or
+-- over-report what's actually available right now.
+---@param ing ActualizedIngredient
+---@param inventories table[]
+---@param minimum number
+---@return boolean
+local function hasEnough(ing, inventories, minimum)
+    return common.countAvailable(ing.record.id, inventories) >= minimum
+end
+
 --- Consume pendingBrewData to decrement ingredient stacks and spin up
 --- a PlayWindow.  Returns false (and calls onStopAlchemy) if ingredients
 --- are no longer available, or if the PlayWindow itself fails to
@@ -154,29 +171,18 @@ local function startPlay()
     local brew      = pendingBrewData
     local batchSize = brew.batchSize
 
-    -- Validate that both ingredients still have enough stock.
-    local function hasEnough(ing)
-        local total = 0
-        for _, obj in ipairs(ing.objects) do
-            if obj:isValid() then total = total + obj.count end
-        end
-        return total >= batchSize
-    end
-
-    if not hasEnough(brew.ingredient1) or not hasEnough(brew.ingredient2) then
+    if not hasEnough(brew.ingredient1, brew.inventories, batchSize) or
+        not hasEnough(brew.ingredient2, brew.inventories, batchSize) then
         settings.debugPrint("startPlay: not enough ingredients")
         startingPlay = false
         onStopAlchemy()
         return false
     end
 
-    -- TODO: read actual tool strengths from player inventory.
-    local toolStrengths = {
-        [const.ToolClass.CALCINATOR] = 1,
-        [const.ToolClass.ALEMBIC]    = 1,
-        [const.ToolClass.MORTAR]     = 1,
-        [const.ToolClass.RETORT]     = 1,
-    }
+    -- Tool strengths were already computed once, from the same nearby
+    -- inventories the ingredients came from, by selectionwindow.lua (via
+    -- inventorysource.lua) when the brew was confirmed.
+    local toolStrengths = brew.toolStrengths
 
     -- Build local copies of the ingredient info with the count fixed to
     -- batchSize for rendering inside the play window (actual object counts
@@ -218,13 +224,19 @@ local function startPlay()
     end
 
     -- Construction succeeded -- now it's safe to actually remove the
-    -- ingredients from the player's inventory.
+    -- ingredients from wherever they currently are. Gather fresh object
+    -- lists right before decrementing rather than reusing the `.objects`
+    -- snapshot captured back in selectionwindow.lua: on a "do it again"
+    -- replay especially, some of those specific stacks may have already
+    -- been fully consumed (or moved) even though hasEnough() above
+    -- confirmed enough total stock still exists somewhere in
+    -- brew.inventories.
     core.sendGlobalEvent(MOD_NAME .. 'onDecrementItems', {
-        items  = brew.ingredient1.objects,
+        items  = common.getObjectsOf(brew.ingredient1.record.id, brew.inventories),
         amount = batchSize,
     })
     core.sendGlobalEvent(MOD_NAME .. 'onDecrementItems', {
-        items  = brew.ingredient2.objects,
+        items  = common.getObjectsOf(brew.ingredient2.record.id, brew.inventories),
         amount = batchSize,
     })
     brew.ingredient1.count = batchSize
@@ -291,6 +303,12 @@ local function onFrame()
         ---------- POTION_DONE_WINDOW --------------------------------------
     elseif currentState == StateClass.POTION_DONE_WINDOW then
         if not doneWindow then
+            local canMakeAnotherBatch = false
+            if pendingBrewData then
+                canMakeAnotherBatch = hasEnough(pendingBrewData.ingredient1, pendingBrewData.inventories,
+                        pendingBrewData.batchSize) and
+                    hasEnough(pendingBrewData.ingredient2, pendingBrewData.inventories, pendingBrewData.batchSize)
+            end
             -- TODO: replace the hardcoded skooma record with the actual
             --       potion produced by the play window.
             doneWindow = potiondonewindow.new(
@@ -302,7 +320,7 @@ local function onFrame()
                     onStopAlchemy()
                 end,
                 -- "Do it again" button: only works if we still have pendingBrewData.
-                function(data)
+                canMakeAnotherBatch and function(data)
                     settings.debugPrint("do alchemy again")
                     currentState = StateClass.PLAY
                     if doneWindow then
@@ -311,7 +329,7 @@ local function onFrame()
                     end
                     -- pendingBrewData is intentionally kept so startPlay() can
                     -- use it again (it will re-validate stock before decrementing).
-                end
+                end or nil
             )
         end
         doneWindow:onFrame()

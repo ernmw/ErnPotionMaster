@@ -213,6 +213,10 @@ local function startPlay()
         doneCallback    = function(data)
             currentState = StateClass.POTION_DONE_WINDOW
             play         = nil
+            --- actually make the potions
+            if data and #data.scores > 0 then
+                core.sendGlobalEvent(MOD_NAME .. 'onPotionBrewed', data)
+            end
         end,
     })
 
@@ -294,7 +298,6 @@ local function onFrame()
     elseif currentState == StateClass.PLAY then
         if not play then
             if not startPlay() then
-                -- startPlay already called onStopAlchemy on failure.
                 return
             end
         end

@@ -219,6 +219,7 @@ end
 return {
     magicEffectsEqual = magicEffectsEqual,
     magicEffectSortFn = magicEffectSortFn,
+    magicEffectStableHash = magicEffectStableHash,
     getMagicEffectsFromIngredients = getMagicEffectsFromIngredients,
     getSharedMagicEffectsFromActualizedIngredients = getSharedMagicEffectsFromActualizedIngredients,
     getAllIngredients = getAllIngredients,

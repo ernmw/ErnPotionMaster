@@ -579,9 +579,14 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
         batchSize = math.min(batchSize, ingred.count)
     end
 
+    local primaryMagicEffect = core.magic.effects.records[desiredMagicEffectWithParams.id]
+    if not primaryMagicEffect then
+        error("magic effect " .. tostring(desiredMagicEffectWithParams.id) .. " not found!")
+    end
+
     -- Game state
     local gs             = {
-        isPotion                        = true,
+        isPotion                        = not primaryMagicEffect.harmful,
         ballID                          = 1,
         currentState                    = PlayStateClass.TARGET_SELECTION,
         actualizedIngredients           = ingredients,
@@ -846,9 +851,15 @@ function PlayWindow:close()
     end
 end
 
+---@class BakedScore
+---@field effect MagicEffectWithParams
+---@field score number
+---@field primary boolean
+
 function PlayWindow:_shotDone(dt)
     settings.debugPrint("shot done")
 
+    ---@type BakedScore[]
     local scores = {}
     for _, mewp in ipairs(self.gameState.effectScores.scores) do
         local floorScore = math.floor(mewp.score)
@@ -864,8 +875,8 @@ function PlayWindow:_shotDone(dt)
 
     self:close()
 
-    -- TODO: forward effect score results to doneCallback
-    if self.doneCallback then self.doneCallback(scores) end
+    -- forward effect score results to doneCallback
+    if self.doneCallback then self.doneCallback({ scores = scores, batchSize = self.gameState.batchSize, player = pself }) end
 end
 
 ------------------------------------------------------------------------

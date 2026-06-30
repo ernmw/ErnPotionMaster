@@ -16,63 +16,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 
--- selectionwindow.lua
--- Presents a four-column selection UI:
---   [Effect list] | [Ingredient 1 list] | [Ingredient 2 list] | [Batch size + Cancel/Brew]
---
--- Navigation is left-to-right via controller or keyboard:
---   Up/Down (stick or arrow keys) – scroll current pane
---   Right / A                    – confirm selection and advance to next pane
---   Left  / B (hold exit)        – go back one pane (clears dependent selections)
---   B (on first pane)            – cancel / close
---   Enter / A (on last pane)     – brew!
---
--- State machine: PRIMARY_EFFECT_SELECTION → INGREDIENT_1_SELECTION
---                → INGREDIENT_2_SELECTION → BATCH_AMOUNT_SELECTION
---
--- ARCHITECTURE NOTE (cascade rebuilds):
--- Each column has exactly one "selection setter" (_setPrimaryEffect,
--- _setIngredient1, _setIngredient2) that is the ONLY thing allowed to
--- change that column's selection. Every input path -- mouse click,
--- keyboard/controller confirm, and Up/Down scrolling -- funnels through
--- these setters instead of poking the VirtualListExt or the index fields
--- directly. Each setter is solely responsible for rebuilding everything
--- downstream of its own column (and only its own column), so there is
--- exactly one place that does that work, instead of it being split
--- between click handlers and the forward/backward state-transition table
--- (which previously caused double rebuilds on mouse clicks and NO rebuild
--- at all when navigating with the keyboard/controller, since scrolling
--- used to bypass the setters and write directly into the list widget).
---
--- behavior being preserved:
--- 1. selected an effect like Water Walking. This populates the 1st ingredient column.
--- 2. select a different effect like Resist Poison. This clears and re-calculates the 1st ingredient column.
--- 3. selected a 1st ingredient like Scales. This populates the 2nd ingredient column, but Scales is
---    missing from it because it is currently selected. so only Sload Soap is listed.
--- 4. go back and select Sload Soap for the 1st ingredient. This re-calculates the 2nd ingredient
---    column so only Scales is present now.
--- 5. go back and select a totally different primary effect. This clears out the 2nd ingredient
---    column and replaces the 1st ingredient column with the next batch of ingredients for that effect.
-
--- NOTE ON THE "batch of 3" crash (out of scope for this file):
--- The log you shared shows startPlay() in alchemy.lua re-decrementing the same batch and
--- re-constructing PlayWindow three times in a row. That isn't caused by selectionwindow.lua --
--- by the time _doBrew() fires here, the correct single BrewData table (one effect, two distinct
--- ingredients, one batch size) has already been handed off exactly once. The actual crash is
--- "attempt to perform arithmetic on local 'index' (a nil value)" inside aux_util.deepToString,
--- called from IngredientInfoContainer.new (ingredientinfo.lua:209) by way of
--- playwindow.lua:600's _init. Because that throw happens *after* alchemy.lua's startPlay() has
--- already sent onDecrementItems for both ingredients, and startPlay() has no guard against being
--- re-entered after a failed/partial attempt, onFrame() just calls startPlay() again next tick
--- (since `play` was never assigned), decrementing and crashing again -- three times, until the
--- stock runs out. Two independent fixes are needed outside this file:
---   1. ingredientinfo.lua / playwindow.lua: stop deep-printing the live UI layout table (it
---      contains userdata the aux util's generic table walker can't index), or guard the print.
---   2. alchemy.lua: make startPlay() idempotent/guarded (e.g. flip a flag, or only decrement
---      ingredients once playwindow.new() has succeeded) so a downstream crash can't cause
---      the same brew to be re-applied on the next frame.
--- Happy to patch those two files as well if you'd like -- just say so.
-
 local MOD_NAME                  = require("scripts.ErnPotionMaster.ns")
 local const                     = require("scripts.ErnPotionMaster.const")
 local ui                        = require("openmw.ui")

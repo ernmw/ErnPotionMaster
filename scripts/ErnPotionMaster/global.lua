@@ -43,10 +43,21 @@ local function onDecrementItems(data)
     common.decrementItems(data.items, data.amount)
 end
 
+---@class PotionBrewedArgs
+---@field scores BakedScore[]
+---@field player table
+---@field batchSize number
+
+---@param data PotionBrewedArgs
+local function onPotionBrewed(data)
+    print("onPotionBrewed: " .. aux_util.deepToString(data, 3))
+end
+
 return {
     eventHandlers = {
         [MOD_NAME .. "onStartAlchemy"] = onStartAlchemy,
         [MOD_NAME .. "onStopAlchemy"] = onStopAlchemy,
         [MOD_NAME .. "onDecrementItems"] = onDecrementItems,
+        [MOD_NAME .. "onPotionBrewed"] = onPotionBrewed,
     }
 }

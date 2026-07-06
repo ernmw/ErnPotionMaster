@@ -26,7 +26,7 @@ local common                   = require("scripts.ErnPotionMaster.common")
 --- This file handles converting magic effect scores into potion records.
 
 ---@class BakedScore
----@field effect MagicEffectWithParams
+---@field effect { id: string, affectedAttribute: string?, affectedSkill: string? } plain, serializable subset of a MagicEffectWithParams
 ---@field score number
 ---@field primary boolean
 
@@ -64,12 +64,12 @@ local MIN_EFFECTIVE_BASE_COST  = 1
 --- math.huge so every value has a match.
 ---@type { maxValue: number, model: string, icon: string }[]
 local VALUE_TIERS              = {
-    { maxValue = 10,        model = "m\\Misc_Potion_Bargain_01.nif",   icon = "icons\\m\\tx_potion_bargain_01.dds" },
-    { maxValue = 25,        model = "m\\Misc_Potion_Cheap_01.nif",     icon = "icons\\m\\tx_potion_cheap_01.dds" },
-    { maxValue = 50,        model = "m\\Misc_Potion_Fresh_01.nif",     icon = "icons\\m\\tx_potion_fresh_01.dds" },
-    { maxValue = 100,       model = "m\\Misc_Potion_Standard_01.nif",  icon = "icons\\m\\tx_potion_standard_01.dds" },
-    { maxValue = 250,       model = "m\\Misc_Potion_Quality_01.nif",   icon = "icons\\m\\tx_potion_quality_01.dds" },
-    { maxValue = math.huge, model = "m\\Misc_Potion_Exclusive_01.nif", icon = "icons\\m\\tx_potion_exclusive_01.dds" },
+    { maxValue = 10,        model = "meshes\\m\\Misc_Potion_Bargain_01.nif",   icon = "textures\\icons\\m\\tx_potion_bargain_01.dds" },
+    { maxValue = 25,        model = "meshes\\m\\Misc_Potion_Cheap_01.nif",     icon = "textures\\icons\\m\\tx_potion_cheap_01.dds" },
+    { maxValue = 50,        model = "meshes\\m\\Misc_Potion_Fresh_01.nif",     icon = "textures\\icons\\m\\tx_potion_fresh_01.dds" },
+    { maxValue = 100,       model = "meshes\\m\\Misc_Potion_Standard_01.nif",  icon = "textures\\icons\\m\\tx_potion_standard_01.dds" },
+    { maxValue = 250,       model = "meshes\\m\\Misc_Potion_Quality_01.nif",   icon = "textures\\icons\\m\\tx_potion_quality_01.dds" },
+    { maxValue = math.huge, model = "meshes\\m\\Misc_Potion_Exclusive_01.nif", icon = "textures\\icons\\m\\tx_potion_exclusive_01.dds" },
 }
 
 ------------------------------------------------------------------------

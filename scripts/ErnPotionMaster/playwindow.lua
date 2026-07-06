@@ -852,7 +852,7 @@ function PlayWindow:close()
 end
 
 ---@class BakedScore
----@field effect MagicEffectWithParams
+---@field effect { id: string, affectedAttribute: string?, affectedSkill: string? } plain, serializable subset of a MagicEffectWithParams -- see _shotDone
 ---@field score number
 ---@field primary boolean
 
@@ -864,8 +864,20 @@ function PlayWindow:_shotDone(dt)
     for _, mewp in ipairs(self.gameState.effectScores.scores) do
         local floorScore = math.floor(mewp.score)
         if floorScore > 0 then
+            local mewParams = mewp.magicEffectParams
             table.insert(scores, {
-                effect = mewp.magicEffectParams,
+                -- Plain table with only the primitive fields recipes.lua's
+                -- getPotionRecord() actually needs (id/affectedAttribute/
+                -- affectedSkill) -- NOT the raw MagicEffectWithParams engine
+                -- object. This table has to survive a core.sendGlobalEvent
+                -- round trip (see doneCallback in alchemy.lua), and that
+                -- serializer rejects opaque engine objects like
+                -- mewParams itself with "Value is not serializable".
+                effect = {
+                    id                = mewParams.id,
+                    affectedAttribute = mewParams.affectedAttribute,
+                    affectedSkill     = mewParams.affectedSkill,
+                },
                 score = floorScore,
                 primary = mewp.primary
             })
@@ -873,10 +885,15 @@ function PlayWindow:_shotDone(dt)
     end
     settings.debugPrint("Shot scores: " .. aux_util.deepToString(scores, 3))
 
+    -- Capture batchSize before self:close(), which sets self.gameState to
+    -- nil -- reading it afterward (as this used to do inline below) crashes
+    -- every time a shot completes.
+    local batchSize = self.gameState.batchSize
+
     self:close()
 
     -- forward effect score results to doneCallback
-    if self.doneCallback then self.doneCallback({ scores = scores, batchSize = self.gameState.batchSize, player = pself }) end
+    if self.doneCallback then self.doneCallback({ scores = scores, batchSize = batchSize, player = pself }) end
 end
 
 ------------------------------------------------------------------------

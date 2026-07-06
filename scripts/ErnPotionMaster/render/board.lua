@@ -81,14 +81,6 @@ function RenderBoard.new(events)
                     },
                     events = events or {},
                     content = ui.content {
-                        {
-                            template = interfaces.MWUI.templates.textNormal,
-                            props = {
-                                text = "this is just a demo",
-                                relativePosition = util.vector2(0.5, 0.5),
-                                anchor = util.vector2(0.5, 0.5)
-                            }
-                        },
                         self._pinsElement,
                         self._ballsElement
                     }

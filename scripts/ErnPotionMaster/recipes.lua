@@ -288,8 +288,10 @@ end
 
 return {
     getPotionRecord = getPotionRecord,
-    eventHandlers   = {
-        onLoad = onLoad,
-        onSave = onSave,
-    },
+    -- These are engine handlers (onSave/onLoad), not custom events -- this
+    -- module isn't a script the engine talks to directly, so global.lua
+    -- must forward its own onSave/onLoad engineHandlers into these for the
+    -- recipe cache to actually persist across a save/reload.
+    onLoad          = onLoad,
+    onSave          = onSave,
 }

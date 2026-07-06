@@ -47,13 +47,20 @@ local selectionwindow  = require("scripts.ErnPotionMaster.selectionwindow")
 ---@enum StateClass
 local StateClass       = {
     --- Player picks effect, ingredient 1, ingredient 2, and batch size.
-    SELECTION_WINDOW   = 1,
+    SELECTION_WINDOW       = 1,
     --- The playwindow takes over: pachinko minigame runs.
-    PLAY               = 2,
+    PLAY                   = 2,
+    --- The shot is over and onPotionBrewed was sent to the global script,
+    --- which is the only place that can call world.createRecord()/
+    --- world.createObject() to actually make the potion. This state is a
+    --- brief holding pattern -- typically resolved within a frame or two --
+    --- until that global-script round trip reports back via the
+    --- onPotionRecordReady event with the actual record that was created.
+    AWAITING_POTION_RECORD = 3,
     --- Allow a quick "do it again" button that re-runs PLAY with the same
     --- ingredients, if they are still available.
-    POTION_DONE_WINDOW = 3,
-    STOPPING           = 4,
+    POTION_DONE_WINDOW     = 4,
+    STOPPING               = 5,
 }
 
 ---@type StateClass
@@ -65,6 +72,16 @@ local currentState     = StateClass.SELECTION_WINDOW
 
 ---@type BrewData?
 local pendingBrewData  = nil
+
+--- Set by onPotionRecordReady once global.lua's onPotionBrewed has actually
+--- created (or reused) the potion record and given it to the player. Only
+--- meaningful while currentState is AWAITING_POTION_RECORD or
+--- POTION_DONE_WINDOW.
+---@type table?
+local pendingPotionRecord = nil
+
+---@type number
+local pendingPotionCount = 1
 
 ------------------------------------------------------------------------
 -- Window handles
@@ -117,8 +134,10 @@ local function onStopAlchemy()
         doneWindow:close(); doneWindow = nil
     end
 
-    pendingBrewData = nil
-    startingPlay    = false
+    pendingBrewData    = nil
+    pendingPotionRecord = nil
+    pendingPotionCount  = 1
+    startingPlay        = false
 
     settings.debugPrint("removemode: alchemy")
     interfaces.UI.removeMode("Alchemy")
@@ -211,11 +230,19 @@ local function startPlay()
         toolStrengths   = toolStrengths,
         desiredEffect   = brew.primaryEffect,
         doneCallback    = function(data)
-            currentState = StateClass.POTION_DONE_WINDOW
-            play         = nil
+            play = nil
             --- actually make the potions
             if data and #data.scores > 0 then
+                -- global.lua creates/reuses the record and hands it back
+                -- via onPotionRecordReady once it's done -- see that
+                -- handler below for why we wait here instead of building
+                -- the done window immediately.
+                currentState = StateClass.AWAITING_POTION_RECORD
                 core.sendGlobalEvent(MOD_NAME .. 'onPotionBrewed', data)
+            else
+                -- Nothing scored, so nothing was brewed; there's no potion
+                -- to show off, so just end the session.
+                onStopAlchemy()
             end
         end,
     })
@@ -249,6 +276,26 @@ local function startPlay()
     play                   = result
     startingPlay           = false
     return true
+end
+
+------------------------------------------------------------------------
+-- Events from global.lua
+------------------------------------------------------------------------
+
+--- Sent by global.lua's onPotionBrewed once it has created/reused the
+--- potion record and placed the batch into the player's inventory.
+---@param data { record: table, count: number }
+local function onPotionRecordReady(data)
+    if currentState ~= StateClass.AWAITING_POTION_RECORD then
+        -- Stale event -- e.g. the player backed out of alchemy (or started
+        -- a new "do it again" round) while the global round trip was still
+        -- in flight. Ignore it rather than clobbering whatever is current.
+        settings.debugPrint("onPotionRecordReady: ignoring stale event")
+        return
+    end
+    pendingPotionRecord = data.record
+    pendingPotionCount  = data.count
+    currentState        = StateClass.POTION_DONE_WINDOW
 end
 
 ------------------------------------------------------------------------
@@ -303,6 +350,14 @@ local function onFrame()
         end
         play:onFrame()
 
+        ---------- AWAITING_POTION_RECORD -----------------------------------
+    elseif currentState == StateClass.AWAITING_POTION_RECORD then
+        -- Waiting on the global script's onPotionRecordReady event (sent
+        -- from onPotionBrewed) to report back with the record it just
+        -- created/reused. Nothing to render in the meantime; onFrame will
+        -- just retick until onPotionRecordReady advances currentState.
+        return
+
         ---------- POTION_DONE_WINDOW --------------------------------------
     elseif currentState == StateClass.POTION_DONE_WINDOW then
         if not doneWindow then
@@ -312,11 +367,9 @@ local function onFrame()
                         pendingBrewData.batchSize) and
                     hasEnough(pendingBrewData.ingredient2, pendingBrewData.inventories, pendingBrewData.batchSize)
             end
-            -- TODO: replace the hardcoded skooma record with the actual
-            --       potion produced by the play window.
             doneWindow = potiondonewindow.new(
-                types.Potion.records["potion_skooma_01"],
-                pendingBrewData and pendingBrewData.batchSize or 1,
+                pendingPotionRecord,
+                pendingPotionCount,
                 -- "Close alchemy" button.
                 function(data)
                     settings.debugPrint("close alchemy window button pressed")
@@ -350,5 +403,6 @@ return {
     },
     eventHandlers = {
         [MOD_NAME .. "onStopAlchemy"] = onStopAlchemy,
+        [MOD_NAME .. "onPotionRecordReady"] = onPotionRecordReady,
     }
 }

@@ -132,7 +132,7 @@ local adminContainer = newContainer(adminGroupKey)
 local function debugPrint(str, ...)
     if adminContainer.debugMode then
         local arg = { ... }
-        if arg ~= nil then
+        if #arg > 0 then
             print(string.format("DEBUG: " .. str, unpack(arg)))
         else
             print("DEBUG: " .. str)

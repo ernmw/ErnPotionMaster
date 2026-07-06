@@ -16,8 +16,10 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 local world    = require('openmw.world')
+local types    = require('openmw.types')
 local aux_util = require('openmw_aux.util')
 local common   = require("scripts.ErnPotionMaster.common")
+local recipes  = require("scripts.ErnPotionMaster.recipes")
 
 if require("openmw.core").API_REVISION < 62 then
     error("OpenMW 0.49 or newer is required!")
@@ -50,10 +52,32 @@ end
 
 ---@param data PotionBrewedArgs
 local function onPotionBrewed(data)
-    print("onPotionBrewed: " .. aux_util.deepToString(data, 3))
+    local batchSize = data.batchSize or 1
+
+    -- getPotionRecord() reuses an existing record for an identical recipe
+    -- instead of creating a new one every brew, so identical potions stack.
+    local record = recipes.getPotionRecord(data.scores)
+
+    -- Give the actual potions to the player. world.createObject/moveInto is
+    -- the only way to place items into an actor's inventory from a global
+    -- script (types.Actor.inventory(actor):addItem(...) does not exist).
+    local item = world.createObject(record.id, batchSize)
+    item:moveInto(types.Actor.inventory(data.player))
+
+    -- Tell the player-side alchemy script (which can't call
+    -- world.createRecord itself) which potion was actually made, so it can
+    -- show it in the "potion done" window instead of a placeholder.
+    data.player:sendEvent(MOD_NAME .. "onPotionRecordReady", {
+        record = record,
+        count  = batchSize,
+    })
 end
 
 return {
+    engineHandlers = {
+        onSave = recipes.onSave,
+        onLoad = recipes.onLoad,
+    },
     eventHandlers = {
         [MOD_NAME .. "onStartAlchemy"] = onStartAlchemy,
         [MOD_NAME .. "onStopAlchemy"] = onStopAlchemy,

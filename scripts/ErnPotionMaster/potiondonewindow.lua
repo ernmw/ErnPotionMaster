@@ -212,7 +212,7 @@ function PotionDoneWindow:onFrame()
         self._closeCallback()
     elseif self._keys.enter.fall then
         settings.debugPrint("again button")
-        self._againCallback()
+        if self._againCallback then self._againCallback() end
     end
 end
 

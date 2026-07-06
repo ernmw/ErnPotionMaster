@@ -68,8 +68,8 @@ local function onPotionBrewed(data)
     -- world.createRecord itself) which potion was actually made, so it can
     -- show it in the "potion done" window instead of a placeholder.
     data.player:sendEvent(MOD_NAME .. "onPotionRecordReady", {
-        record = record,
-        count  = batchSize,
+        recordID = record.id,
+        count    = batchSize,
     })
 end
 

@@ -41,10 +41,10 @@ local common                   = require("scripts.ErnPotionMaster.common")
 --- Multiplier applied to an effect's score to get its magnitude.
 --- Magnitude min and max are always set equal to each other, since the
 --- minigame produces a single, precise score rather than a random range.
-local MAGNITUDE_SCALE          = 1.0
+local MAGNITUDE_SCALE          = 10.0
 
 --- Multiplier applied to an effect's score to get its duration, in seconds.
-local DURATION_SCALE           = 1.0
+local DURATION_SCALE           = 25.0
 
 --- Effects with a magnitude are never generated below this value.
 local MIN_MAGNITUDE            = 1

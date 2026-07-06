@@ -16,36 +16,36 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 
-local MOD_NAME         = require("scripts.ErnPotionMaster.ns")
-local const            = require("scripts.ErnPotionMaster.const")
-local ui               = require("openmw.ui")
-local util             = require("openmw.util")
-local pself            = require("openmw.self")
-local core             = require("openmw.core")
-local types            = require("openmw.types")
-local placepins        = require("scripts.ErnPotionMaster.placepins")
-local settings         = require("scripts.ErnPotionMaster.settings.settings")
-local physics          = require("scripts.ErnPotionMaster.physics.pachinko")
-local interfaces       = require('openmw.interfaces')
-local shuffle          = require("scripts.ErnPotionMaster.shuffle")
-local aux_util         = require('openmw_aux.util')
-local renderBoard      = require("scripts.ErnPotionMaster.render.board")
-local templates        = require("scripts.ErnPotionMaster.render.templates")
-local effectScore      = require("scripts.ErnPotionMaster.effectscore")
-local ingredientInfo   = require("scripts.ErnPotionMaster.ingredientinfo")
-local potiondonewindow = require("scripts.ErnPotionMaster.potiondonewindow")
-local search           = require("scripts.ErnPotionMaster.search")
-local common           = require("scripts.ErnPotionMaster.common")
+local MOD_NAME            = require("scripts.ErnPotionMaster.ns")
+local const               = require("scripts.ErnPotionMaster.const")
+local ui                  = require("openmw.ui")
+local util                = require("openmw.util")
+local pself               = require("openmw.self")
+local core                = require("openmw.core")
+local types               = require("openmw.types")
+local placepins           = require("scripts.ErnPotionMaster.placepins")
+local settings            = require("scripts.ErnPotionMaster.settings.settings")
+local physics             = require("scripts.ErnPotionMaster.physics.pachinko")
+local interfaces          = require('openmw.interfaces')
+local shuffle             = require("scripts.ErnPotionMaster.shuffle")
+local aux_util            = require('openmw_aux.util')
+local renderBoard         = require("scripts.ErnPotionMaster.render.board")
+local templates           = require("scripts.ErnPotionMaster.render.templates")
+local effectScore         = require("scripts.ErnPotionMaster.effectscore")
+local ingredientInfo      = require("scripts.ErnPotionMaster.ingredientinfo")
+local potiondonewindow    = require("scripts.ErnPotionMaster.potiondonewindow")
+local search              = require("scripts.ErnPotionMaster.search")
+local common              = require("scripts.ErnPotionMaster.common")
 
-local playwindow       = require("scripts.ErnPotionMaster.playwindow")
-local selectionwindow  = require("scripts.ErnPotionMaster.selectionwindow")
+local playwindow          = require("scripts.ErnPotionMaster.playwindow")
+local selectionwindow     = require("scripts.ErnPotionMaster.selectionwindow")
 
 ------------------------------------------------------------------------
 -- State machine
 ------------------------------------------------------------------------
 
 ---@enum StateClass
-local StateClass       = {
+local StateClass          = {
     --- Player picks effect, ingredient 1, ingredient 2, and batch size.
     SELECTION_WINDOW       = 1,
     --- The playwindow takes over: pachinko minigame runs.
@@ -64,14 +64,14 @@ local StateClass       = {
 }
 
 ---@type StateClass
-local currentState     = StateClass.SELECTION_WINDOW
+local currentState        = StateClass.SELECTION_WINDOW
 
 ------------------------------------------------------------------------
 -- Per-run data (populated by the selection window, consumed by PLAY)
 ------------------------------------------------------------------------
 
 ---@type BrewData?
-local pendingBrewData  = nil
+local pendingBrewData     = nil
 
 --- Set by onPotionRecordReady once global.lua's onPotionBrewed has actually
 --- created (or reused) the potion record and given it to the player. Only
@@ -81,20 +81,20 @@ local pendingBrewData  = nil
 local pendingPotionRecord = nil
 
 ---@type number
-local pendingPotionCount = 1
+local pendingPotionCount  = 1
 
 ------------------------------------------------------------------------
 -- Window handles
 ------------------------------------------------------------------------
 
 ---@type SelectionWindow?
-local selWindow        = nil
+local selWindow           = nil
 
 ---@type PlayWindow?
-local play             = nil
+local play                = nil
 
 ---@type PotionDoneWindow?
-local doneWindow       = nil
+local doneWindow          = nil
 
 ------------------------------------------------------------------------
 -- Re-entrancy guard for startPlay()
@@ -110,7 +110,7 @@ local doneWindow       = nil
 -- destructive and cleared only once we know the outcome (success or a
 -- definitive failure), so a re-entrant call during that window is a no-op
 -- instead of a repeat of the same work.
-local startingPlay     = false
+local startingPlay        = false
 
 ------------------------------------------------------------------------
 -- Helpers
@@ -134,7 +134,7 @@ local function onStopAlchemy()
         doneWindow:close(); doneWindow = nil
     end
 
-    pendingBrewData    = nil
+    pendingBrewData     = nil
     pendingPotionRecord = nil
     pendingPotionCount  = 1
     startingPlay        = false
@@ -284,7 +284,7 @@ end
 
 --- Sent by global.lua's onPotionBrewed once it has created/reused the
 --- potion record and placed the batch into the player's inventory.
----@param data { record: table, count: number }
+---@param data { recordID: string, count: number }
 local function onPotionRecordReady(data)
     if currentState ~= StateClass.AWAITING_POTION_RECORD then
         -- Stale event -- e.g. the player backed out of alchemy (or started
@@ -293,7 +293,8 @@ local function onPotionRecordReady(data)
         settings.debugPrint("onPotionRecordReady: ignoring stale event")
         return
     end
-    pendingPotionRecord = data.record
+
+    pendingPotionRecord = types.Potion.record(data.recordID)
     pendingPotionCount  = data.count
     currentState        = StateClass.POTION_DONE_WINDOW
 end

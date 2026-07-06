@@ -29,15 +29,15 @@ local search   = require("scripts.ErnPotionMaster.search")
 local function magicEffectsEqual(a, b)
     return a.affectedAttribute == b.affectedAttribute and
         a.affectedSkill == b.affectedSkill and
-        a.id == b.id
+        a.effect.id == b.effect.id
 end
 
 ---@param a MagicEffectWithParams
 ---@param b MagicEffectWithParams
 ---@return boolean
 local function magicEffectSortFn(a, b)
-    if a.id ~= b.id then
-        return a.id < b.id
+    if a.effect.id ~= b.effect.id then
+        return a.effect.id < b.effect.id
     end
     if a.affectedAttribute ~= b.affectedAttribute then
         return a.affectedAttribute < b.affectedAttribute

@@ -21,6 +21,7 @@ local MOD_NAME                 = require("scripts.ErnPotionMaster.ns")
 local types                    = require('openmw.types')
 local core                     = require('openmw.core')
 local world                    = require('openmw.world')
+local aux_util                 = require('openmw_aux.util')
 local common                   = require("scripts.ErnPotionMaster.common")
 
 --- This file handles converting magic effect scores into potion records.
@@ -187,7 +188,7 @@ local function buildEffectsList(scores, effectMap)
 
         ---@type MagicEffectWithParams
         local mewp = {
-            effect            = score.effect.id,
+            id                = score.effect.id,
             affectedAttribute = score.effect.affectedAttribute,
             affectedSkill     = score.effect.affectedSkill,
             -- Potions only ever apply to the drinker, and never have area
@@ -212,6 +213,7 @@ local function buildEffectsList(scores, effectMap)
 
         table.insert(effects, mewp)
     end
+    print("new effects list: " .. aux_util.deepToString(effects, 5))
     return effects
 end
 

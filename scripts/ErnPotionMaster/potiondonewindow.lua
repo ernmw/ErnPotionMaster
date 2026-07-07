@@ -173,6 +173,8 @@ end
 ---@param againCallback fun(data)? start up another shot with current ingredients
 ---@return PotionDoneWindow
 function PotionDoneWindow.new(record, count, closeCallback, againCallback)
+    --- TODO: need a "failure" window when the player fails to get any effects
+    --- this should still have an again/done button.
     local self = setmetatable({
         _potionRenderer     = potionux.NewPotionRenderer(
             record,

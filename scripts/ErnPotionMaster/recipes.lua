@@ -82,13 +82,17 @@ local recipes                  = {}
 ---@param effectRecord table core.magic.effects.records[...] entry
 ---@return string
 local function effectDisplayName(effectRecord)
-    return effectRecord.name or effectRecord.id
+    --- TODO: if this is drain/damage/restore/fortify,
+    --- then I want to instead show something like "Damage Personality".
+    --- should pull the associated attribute or skill from the effect.
+    return effectRecord.name
 end
 
 ---@param score BakedScore
 ---@param effectRecord table core.magic.effects.records[...] entry
 ---@return string
 local function potionNameFromScore(score, effectRecord)
+    --- TODO: use the l10n translation file
     local prefix = effectRecord.harmful and "Poison of " or "Potion of "
     return prefix .. effectDisplayName(effectRecord)
 end

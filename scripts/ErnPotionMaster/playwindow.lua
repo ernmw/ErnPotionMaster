@@ -637,6 +637,12 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
         end
     end
 
+    -- TODO: I need to vary the number of pins per effect.
+    -- Hitting two pins of the same effect type should get you enough points
+    -- for that effect to unlock level 1 for that effect.
+    -- For effects with a high base cost (and especially for effects that have no duration and no magnitude),
+    -- I want to reduce the number of pins associated with that effect on the board (minimum 2).
+
     ---@type {[PinClass]:number}
     local toolPinCounts = {
         [PinClass.ALEMBIC]    = math.ceil(2 * gs.toolStrengths[const.ToolClass.ALEMBIC]),

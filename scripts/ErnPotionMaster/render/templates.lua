@@ -35,17 +35,34 @@ local skills         = core.stats.Skill.records
 ---@return table
 local function effectNumbersLayout(mewp, textColor)
     local text
-    if mewp.magnitudeMin == mewp.magnitudeMax and mewp.magnitudeMax then
-        text = localization("magnitudeWithDuration", {
-            magnitude = mewp.magnitudeMax,
+    if mewp.effect.hasDuration and mewp.effect.hasMagnitude then
+        if mewp.magnitudeMin == mewp.magnitudeMax and mewp.magnitudeMax then
+            text = localization("magnitudeWithDuration", {
+                magnitude = mewp.magnitudeMax,
+                duration = mewp.duration or 1,
+            })
+        else
+            text = localization("minMaxWithDuration", {
+                min = mewp.magnitudeMin or 1,
+                max = mewp.magnitudeMax or 1,
+                duration = mewp.duration or 1,
+            })
+        end
+    elseif mewp.effect.hasDuration then
+        text = localization("durationOnly", {
             duration = mewp.duration or 1,
         })
     else
-        text = localization("minMaxWithDuration", {
-            min = mewp.magnitudeMin or 1,
-            max = mewp.magnitudeMax or 1,
-            duration = mewp.duration or 1,
-        })
+        if mewp.magnitudeMin == mewp.magnitudeMax and mewp.magnitudeMax then
+            text = localization("magnitudeOnly", {
+                magnitude = mewp.magnitudeMax,
+            })
+        else
+            text = localization("minMaxOnly", {
+                min = mewp.magnitudeMin or 1,
+                max = mewp.magnitudeMax or 1,
+            })
+        end
     end
 
 

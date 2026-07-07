@@ -15,6 +15,9 @@ customUIScale_name: "Custom UI Scale Factor"
 effectWithParam: "{effectName}: {effectParam}"
 minMaxWithDuration: "{min} to {max} for {duration} seconds"
 magnitudeWithDuration: "{magnitude} for {duration} seconds"
+durationOnly: "for {duration} seconds"
+minMaxOnly: "{min} to {max}"
+magnitudeOnly: "{magnitude}"
 
 itemQuantity: "{name} x{quantity}"
 

@@ -873,8 +873,12 @@ function PlayWindow:_shotDone(dt)
                 -- round trip (see doneCallback in alchemy.lua), and that
                 -- serializer rejects opaque engine objects like
                 -- mewParams itself with "Value is not serializable".
+                --
+                -- Note: MagicEffectWithParams has no top-level `.id` field --
+                -- the magic effect's id lives on the nested `.effect` record
+                -- (a #MagicEffect), i.e. mewParams.effect.id.
                 effect = {
-                    id                = mewParams.id,
+                    id                = mewParams.effect.id,
                     affectedAttribute = mewParams.affectedAttribute,
                     affectedSkill     = mewParams.affectedSkill,
                 },

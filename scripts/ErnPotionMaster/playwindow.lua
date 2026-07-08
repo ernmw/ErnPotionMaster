@@ -639,8 +639,8 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
 
     --- Effects with a high base cost are worth more per point of score, so
     --- a smaller board presence still lets them meaningfully affect the
-    --- potion. Effects with neither magnitude nor duration only need one
-    --- successful hit to register at all in the resulting potion (see
+    --- potion. Effects with neither magnitude nor duration only need two
+    --- successful hits to register at all in the resulting potion (see
     --- recipes.lua's hashScore(), which drops the score entirely from the
     --- recipe hash for such effects) -- extra pins for them just clutter
     --- the board for no benefit, so they're pushed further toward the
@@ -664,6 +664,8 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
         else
             local pinBudget = pinsForEffect(mewp)
             for _ = 1, pinBudget, 1 do
+                --- maybe replace side-effect pins with our primary effect
+                --- TODO: also reduce beneficial effects if we're making a poison (and vice-versa).
                 local target = math.random() < replaceChance and gs.desiredMagicEffectWithParamsIdx or idx
                 effectPinCounts[target] = (effectPinCounts[target] or 0) + 1
             end

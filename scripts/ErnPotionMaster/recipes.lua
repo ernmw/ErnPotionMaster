@@ -241,8 +241,8 @@ local function buildEffectsList(scores, effectMap)
         }
 
         -- more duration or magnitude if one is missing
-        local magScale = effectRecord.hasDuration and MAGNITUDE_SCALE or 2 * MAGNITUDE_SCALE
-        local durScale = effectRecord.hasMagnitude and DURATION_SCALE or 2 * DURATION_SCALE
+        local magScale = (effectRecord.hasDuration and MAGNITUDE_SCALE or 2 * MAGNITUDE_SCALE)
+        local durScale = (effectRecord.hasMagnitude and DURATION_SCALE or 2 * DURATION_SCALE)
 
         if effectRecord.hasMagnitude then
             local magnitude = math.max(MIN_MAGNITUDE,
@@ -250,6 +250,7 @@ local function buildEffectsList(scores, effectMap)
 
             --- scale it down as we approach MAX_MAGNITUDE
             magnitude = magnitude / (1 + easeInCirc(magnitude / MAX_MAGNITUDE))
+            magnitude = math.min(magnitude, MAX_MAGNITUDE)
 
             mewp.magnitudeMin = magnitude
             mewp.magnitudeMax = magnitude
@@ -260,7 +261,8 @@ local function buildEffectsList(scores, effectMap)
                 math.floor(score.score * durScale + 0.5))
 
             --- scale it down as we approach 500
-            durScale = durScale / (1 + easeInCirc(mewp.duration / MAX_DURATION))
+            mewp.duration = mewp.duration / (1 + easeInCirc(mewp.duration / MAX_DURATION))
+            mewp.duration = math.min(mewp.duration, MAX_MAGNITUDE)
         end
 
         table.insert(effects, mewp)

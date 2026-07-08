@@ -203,7 +203,11 @@ end
 ---@return EffectScore
 local function effectPinHit(original)
     original.multiplier = original.multiplier + 0.05
-    original.score      = original.score + 0.3 + original.multiplier
+    -- Base increment tuned so exactly two hits on the same effect within a
+    -- shot clears floor(score) >= 1 (0.5+0.05=0.55, then +0.5+0.10=1.15) --
+    -- i.e. two pins of an effect is enough to "unlock" it in the resulting
+    -- potion. See the pin-count-per-effect note in _init() below.
+    original.score = original.score + 0.5 + original.multiplier
     settings.debugPrint("effect " ..
         tostring(original.magicEffectParams.id) .. " score is now " .. tostring(original.score))
     return original
@@ -252,7 +256,13 @@ function PlayWindow:_tool_reset()
             pinInfo.explodeAnim = nil
             self.gameState.physics.pins[id].enabled = true
             self:_register_pin_renderer(pinInfo)
-            --TODO: add some flair when the pins reset
+            -- Flair: reuse the existing hit-flash/hit-anim system (see
+            -- _getEffectPinLayouter/_getToolPinLayouter) by marking the pin
+            -- as freshly "hit" -- this plays the same white flash + burst
+            -- animation a real ball-hit would, so a reset doesn't look like
+            -- the pin just silently reappeared.
+            pinInfo.hit = true
+            pinInfo.hitLeft = math.random() < 0.5
         end
     end
 end
@@ -626,22 +636,43 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
 
     ---@type {[number]:number}
     local effectPinCounts = {}
-    for idx, _ in ipairs(gs.magicEffectsWithParams) do
+
+    --- Effects with a high base cost are worth more per point of score, so
+    --- a smaller board presence still lets them meaningfully affect the
+    --- potion. Effects with neither magnitude nor duration only need one
+    --- successful hit to register at all in the resulting potion (see
+    --- recipes.lua's hashScore(), which drops the score entirely from the
+    --- recipe hash for such effects) -- extra pins for them just clutter
+    --- the board for no benefit, so they're pushed further toward the
+    --- minimum. Every effect still gets at least 3 pins so it's always
+    --- possible to hit it.
+    ---@param mewp MagicEffectWithParams
+    ---@return number
+    local function pinsForEffect(mewp)
+        local effect = mewp.effect
+        local baseCost = util.clamp(effect.baseCost or 1, 1, 20)
+        local costFactor = util.remap(baseCost, 1, 20, 1, 0.35)
+        if not effect.hasMagnitude and not effect.hasDuration then
+            costFactor = costFactor * 0.5
+        end
+        return math.max(3, math.floor(const.PinsPerEffect * costFactor + 0.5))
+    end
+
+    for idx, mewp in ipairs(gs.magicEffectsWithParams) do
         if idx == gs.desiredMagicEffectWithParamsIdx then
             effectPinCounts[idx] = math.ceil(const.PinsPerEffect * 1.5)
         else
-            for _ = 1, const.PinsPerEffect, 1 do
+            local pinBudget = pinsForEffect(mewp)
+            for _ = 1, pinBudget, 1 do
                 local target = math.random() < replaceChance and gs.desiredMagicEffectWithParamsIdx or idx
                 effectPinCounts[target] = (effectPinCounts[target] or 0) + 1
             end
         end
     end
 
-    -- TODO: I need to vary the number of pins per effect.
-    -- Hitting two pins of the same effect type should get you enough points
-    -- for that effect to unlock level 1 for that effect.
-    -- For effects with a high base cost (and especially for effects that have no duration and no magnitude),
-    -- I want to reduce the number of pins associated with that effect on the board (minimum 2).
+    -- Hitting two pins of the same effect type gets you enough points for
+    -- that effect to unlock level 1 for that effect -- see effectPinHit()
+    -- above, which is tuned to that goal.
 
     ---@type {[PinClass]:number}
     local toolPinCounts = {

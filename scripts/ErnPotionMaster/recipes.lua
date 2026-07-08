@@ -23,6 +23,7 @@ local core                     = require('openmw.core')
 local world                    = require('openmw.world')
 local aux_util                 = require('openmw_aux.util')
 local common                   = require("scripts.ErnPotionMaster.common")
+local localization             = core.l10n(MOD_NAME)
 
 --- This file handles converting magic effect scores into potion records.
 
@@ -37,6 +38,10 @@ local common                   = require("scripts.ErnPotionMaster.common")
 -- Turn these to change how "loud" a potion's magnitude/duration is
 -- relative to the score the player achieved in the minigame, and how
 -- effect score translates into gold value.
+
+local MAX_MAGNITUDE            = 200
+local MAX_DURATION             = 500
+local VALUE_SCALE              = 5
 
 --- Multiplier applied to an effect's score to get its magnitude.
 --- Magnitude min and max are always set equal to each other, since the
@@ -79,12 +84,43 @@ local VALUE_TIERS              = {
 ---@type { [string]: string }
 local recipes                  = {}
 
+--- Effect ids whose generic record name (e.g. "Damage Attribute") is just
+--- a verb plus a placeholder -- these should have the placeholder replaced
+--- with the actual attribute/skill name (e.g. "Damage Personality") so the
+--- potion name says what it actually does.
+local attributes               = core.stats.Attribute.records
+local skills                   = core.stats.Skill.records
+local VERB_PLACEHOLDER_EFFECTS = {
+    --- TODO: this map is not necessary. you can just check if effect.affectedAttribute and effect.affectedSkill are nil.
+    [core.magic.EFFECT_TYPE.DrainAttribute] = true,
+    [core.magic.EFFECT_TYPE.DrainSkill] = true,
+    [core.magic.EFFECT_TYPE.DamageAttribute] = true,
+    [core.magic.EFFECT_TYPE.DamageSkill] = true,
+    [core.magic.EFFECT_TYPE.RestoreAttribute] = true,
+    [core.magic.EFFECT_TYPE.RestoreSkill] = true,
+    [core.magic.EFFECT_TYPE.FortifyAttribute] = true,
+    [core.magic.EFFECT_TYPE.FortifySkill] = true,
+}
+
+---@param score BakedScore
 ---@param effectRecord table core.magic.effects.records[...] entry
 ---@return string
-local function effectDisplayName(effectRecord)
-    --- TODO: if this is drain/damage/restore/fortify,
-    --- then I want to instead show something like "Damage Personality".
-    --- should pull the associated attribute or skill from the effect.
+local function effectDisplayName(score, effectRecord)
+    if VERB_PLACEHOLDER_EFFECTS[effectRecord.id] then
+        local paramName
+        if score.effect.affectedAttribute then
+            paramName = attributes[score.effect.affectedAttribute].name
+        elseif score.effect.affectedSkill then
+            paramName = skills[score.effect.affectedSkill].name
+        end
+        if paramName then
+            -- effectRecord.name is e.g. "Damage Attribute" -- the verb is
+            -- always its first word. Swap in the real attribute/skill name
+            -- for the generic placeholder, e.g. "Damage Personality".
+            local verb = effectRecord.name:match("^(%S+)") or effectRecord.name
+            return verb .. " " .. paramName
+        end
+    end
     return effectRecord.name
 end
 
@@ -92,9 +128,8 @@ end
 ---@param effectRecord table core.magic.effects.records[...] entry
 ---@return string
 local function potionNameFromScore(score, effectRecord)
-    --- TODO: use the l10n translation file
-    local prefix = effectRecord.harmful and "Poison of " or "Potion of "
-    return prefix .. effectDisplayName(effectRecord)
+    local key = effectRecord.harmful and "poisonName" or "potionName"
+    return localization(key, { effectName = effectDisplayName(score, effectRecord) })
 end
 
 ---@param value number
@@ -182,6 +217,10 @@ local function pickAnchorIdx(scores, effectMap)
     return primaryIdx or highestIdx
 end
 
+local function easeInCirc(x)
+    return 1 - math.sqrt(1 - math.pow(x, 2));
+end
+
 ---@param scores BakedScore[]
 ---@param effectMap table[]
 ---@return MagicEffectWithParams[]
@@ -201,18 +240,27 @@ local function buildEffectsList(scores, effectMap)
             area              = 0,
         }
 
+        -- more duration or magnitude if one is missing
+        local magScale = effectRecord.hasDuration and MAGNITUDE_SCALE or 2 * MAGNITUDE_SCALE
+        local durScale = effectRecord.hasMagnitude and DURATION_SCALE or 2 * DURATION_SCALE
+
         if effectRecord.hasMagnitude then
             local magnitude = math.max(MIN_MAGNITUDE,
-                math.floor(score.score * MAGNITUDE_SCALE + 0.5))
-            -- min == max: the minigame produces one precise score, not a
-            -- random range.
+                math.floor(score.score * magScale + 0.5))
+
+            --- scale it down as we approach MAX_MAGNITUDE
+            magnitude = magnitude / (1 + easeInCirc(magnitude / MAX_MAGNITUDE))
+
             mewp.magnitudeMin = magnitude
             mewp.magnitudeMax = magnitude
         end
 
         if effectRecord.hasDuration then
             mewp.duration = math.max(MIN_DURATION,
-                math.floor(score.score * DURATION_SCALE + 0.5))
+                math.floor(score.score * durScale + 0.5))
+
+            --- scale it down as we approach 500
+            durScale = durScale / (1 + easeInCirc(mewp.duration / MAX_DURATION))
         end
 
         table.insert(effects, mewp)
@@ -232,7 +280,11 @@ local function newPotionTemplate(scores, effectMap)
     local anchorScore  = scores[anchorIdx]
     local anchorEffect = effectMap[anchorIdx]
 
-    local value        = math.ceil(anchorScore.score *
+    local effects      = buildEffectsList(scores, effectMap)
+
+    --- TODO: the value should be the SUM of this equation vs EACH
+    --- effect in effects, not just the anchor effect.
+    local value        = math.ceil(VALUE_SCALE * anchorScore.score *
         math.max(MIN_EFFECTIVE_BASE_COST, anchorEffect.baseCost) *
         (anchorEffect.harmful and HARMFUL_VALUE_MULTIPLIER or 1))
 
@@ -245,7 +297,7 @@ local function newPotionTemplate(scores, effectMap)
         name       = potionNameFromScore(anchorScore, anchorEffect),
         value      = value,
         weight     = 0.1,
-        effects    = buildEffectsList(scores, effectMap),
+        effects    = effects,
     }
 end
 

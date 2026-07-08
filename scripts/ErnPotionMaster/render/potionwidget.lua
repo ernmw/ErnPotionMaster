@@ -54,17 +54,17 @@ local function deepCopy(orig)
     return copy
 end
 
-local function NewPotionRenderer(potionRecord, props, count)
+local function NewPotionRenderer(potionRecord, props, count, color)
     local effectLayouts = {}
     for _, mewp in pairs(potionRecord.effects) do
         table.insert(effectLayouts, templates.effectLayout(mewp))
         table.insert(effectLayouts, templates.effectNumbersLayout(mewp))
     end
 
-    -- this is an ESM3_EffectParams
-    --
-    local color    = const.MagickColors[potionRecord.effects[1].effect.school].default
-        or const.MagickColors.unknown.default
+    --- default to a color if one is not provided.
+    color          = color or (const.MagickColors[potionRecord.effects[1].effect.school].default
+        or const.MagickColors.unknown.default)
+
     local glowAnim = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\effect_36.dds",
         util.vector2(512, 512),
         16, 10, nil, nil, {

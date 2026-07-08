@@ -53,7 +53,7 @@ local localization       = core.l10n(MOD_NAME)
 
 ---@class PotionDoneWindow
 ---@field window table  openmw ui element
----@field _potionRenderer PotionRenderer
+---@field _potionRenderer PotionRenderer? nil if the shot failed to produce any potion
 ---@field _closeCallback fun(data) close the alchemy window
 ---@field _againCallback fun(data)? start up another shot with current ingredients
 ---@field _doneButtonElement any
@@ -129,14 +129,24 @@ function PotionDoneWindow:_getLayout(dt)
 
                 content = ui.content {
 
-                    -- Main potion renderer
+                    -- Main potion renderer, or a failure message if the
+                    -- shot didn't score any effects.
                     {
                         type = ui.TYPE.Container,
                         external = {
                             grow = 1,
                         },
                         content = ui.content {
-                            self._potionRenderer:GetLayout(dt)
+                            self._potionRenderer and self._potionRenderer:GetLayout(dt) or {
+                                type = ui.TYPE.Text,
+                                props = {
+                                    text = localization("potionFailureMessage", {}),
+                                    textColor = myui.interactiveTextColors.normal.default,
+                                    textAlignV = ui.ALIGNMENT.Center,
+                                    textAlignH = ui.ALIGNMENT.Center,
+                                    textSize = 18,
+                                },
+                            }
                         }
                     },
 
@@ -167,23 +177,25 @@ function PotionDoneWindow:_getLayout(dt)
     }
 end
 
----@param record table potion record
+---@param record table? potion record; nil if the shot failed to score any effects
 ---@param count number
 ---@param closeCallback fun(data)? close the alchemy window
 ---@param againCallback fun(data)? start up another shot with current ingredients
 ---@return PotionDoneWindow
 function PotionDoneWindow.new(record, count, closeCallback, againCallback)
-    --- TODO: need a "failure" window when the player fails to get any effects
-    --- this should still have an again/done button.
+    -- A nil record means the shot didn't score any effects, so there's
+    -- nothing to brew -- _getLayout() shows a failure message instead of
+    -- the potion renderer in that case, but the again/done buttons still
+    -- work as normal.
     local self = setmetatable({
-        _potionRenderer     = potionux.NewPotionRenderer(
+        _potionRenderer     = record and potionux.NewPotionRenderer(
             record,
             {
                 --size = util.vector2(500, 500),
                 arrange = ui.ALIGNMENT.Center,
             },
             count
-        ),
+        ) or nil,
         _closeCallback      = closeCallback,
         _againCallback      = againCallback,
         _doneButtonElement  = ui.create {},
@@ -192,7 +204,7 @@ function PotionDoneWindow.new(record, count, closeCallback, againCallback)
     }, PotionDoneWindow)
     self:_updateAgainButtonElement()
     self:_updateDoneButtonElement()
-    self.window = ui.create(self._potionRenderer)
+    self.window = ui.create({})
     return self
 end
 

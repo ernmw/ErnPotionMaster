@@ -27,6 +27,10 @@ ingredient2Column: "2nd Ingredient"
 batchColumn: "Batch Size"
 selectEffectHint: "Select a primary effect."
 
+potionName: "Potion of {effectName}"
+poisonName: "Poison of {effectName}"
+potionFailureMessage: "Oh no!"
+
 brewButton: "Brew"
 doneButton: "Done"
 againButton: "Again"

@@ -240,9 +240,14 @@ local function startPlay()
                 currentState = StateClass.AWAITING_POTION_RECORD
                 core.sendGlobalEvent(MOD_NAME .. 'onPotionBrewed', data)
             else
-                -- Nothing scored, so nothing was brewed; there's no potion
-                -- to show off, so just end the session.
-                onStopAlchemy()
+                -- Nothing scored, so nothing was brewed. There's no global
+                -- round trip to wait on (no record to create), so go
+                -- straight to the done window with a nil record -- it
+                -- shows a failure message instead of a potion, but still
+                -- offers "again"/"close" like a normal result.
+                pendingPotionRecord = nil
+                pendingPotionCount  = 0
+                currentState        = StateClass.POTION_DONE_WINDOW
             end
         end,
     })

@@ -202,12 +202,14 @@ end
 ---@param original EffectScore
 ---@return EffectScore
 local function effectPinHit(original)
-    original.multiplier = original.multiplier + 0.05
-    -- Base increment tuned so exactly two hits on the same effect within a
-    -- shot clears floor(score) >= 1 (0.5+0.05=0.55, then +0.5+0.10=1.15) --
-    -- i.e. two pins of an effect is enough to "unlock" it in the resulting
-    -- potion. See the pin-count-per-effect note in _init() below.
-    original.score = original.score + 0.5 + original.multiplier
+    --- TODO: scale intended effect points per pin up, and unintended down, based on something.
+    if original.score < 1 then
+        -- Two hits on a pin will always unlock the effect (if it's an intended effect).
+        original.score = original.score + 0.5
+    else
+        original.multiplier = original.multiplier + 0.05
+        original.score = (original.score + 0.25) * (1 + original.multiplier)
+    end
     settings.debugPrint("effect " ..
         tostring(original.magicEffectParams.id) .. " score is now " .. tostring(original.score))
     return original

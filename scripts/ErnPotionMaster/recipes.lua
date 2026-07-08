@@ -17,53 +17,51 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 
 
-local MOD_NAME                 = require("scripts.ErnPotionMaster.ns")
-local types                    = require('openmw.types')
-local core                     = require('openmw.core')
-local world                    = require('openmw.world')
-local aux_util                 = require('openmw_aux.util')
-local common                   = require("scripts.ErnPotionMaster.common")
-local localization             = core.l10n(MOD_NAME)
+local MOD_NAME     = require("scripts.ErnPotionMaster.ns")
+local types        = require('openmw.types')
+local core         = require('openmw.core')
+local world        = require('openmw.world')
+local aux_util     = require('openmw_aux.util')
+local util         = require('openmw.util')
+local common       = require("scripts.ErnPotionMaster.common")
+local localization = core.l10n(MOD_NAME)
 
 --- This file handles converting magic effect scores into potion records.
+
+
+local consts = {
+    MAX_MAGNITUDE            = 200,
+    MAX_DURATION             = 500,
+    VALUE_SCALE              = 5,
+
+    --- Multiplier applied to an effect's score to get its magnitude.
+    --- Magnitude min and max are always set equal to each other, since the
+    --- minigame produces a single, precise score rather than a random range.
+    MAGNITUDE_SCALE          = 10.0,
+
+    --- Multiplier applied to an effect's score to get its duration, in seconds.
+    DURATION_SCALE           = 25.0,
+
+    --- Effects with a magnitude are never generated below this value.
+    MIN_MAGNITUDE            = 1,
+
+    --- Effects with a duration are never generated below this value.
+    MIN_DURATION             = 1,
+
+    --- Gold value is (topScore.score * effect.baseCost), clamped so that
+    --- an effect with a very low baseCost still contributes something, then
+    --- multiplied by HARMFUL_VALUE_MULTIPLIER if the top-scoring effect is
+    --- harmful (poisons are worth less than beneficial potions of the same
+    --- strength).
+    HARMFUL_VALUE_MULTIPLIER = 0.3,
+    MIN_EFFECTIVE_BASE_COST  = 1,
+}
 
 ---@class BakedScore
 ---@field effect { id: string, affectedAttribute: string?, affectedSkill: string? } plain, serializable subset of a MagicEffectWithParams
 ---@field score number
 ---@field primary boolean
 
-------------------------------------------------------------------------
--- Tuning dials
-------------------------------------------------------------------------
--- Turn these to change how "loud" a potion's magnitude/duration is
--- relative to the score the player achieved in the minigame, and how
--- effect score translates into gold value.
-
-local MAX_MAGNITUDE            = 200
-local MAX_DURATION             = 500
-local VALUE_SCALE              = 5
-
---- Multiplier applied to an effect's score to get its magnitude.
---- Magnitude min and max are always set equal to each other, since the
---- minigame produces a single, precise score rather than a random range.
-local MAGNITUDE_SCALE          = 10.0
-
---- Multiplier applied to an effect's score to get its duration, in seconds.
-local DURATION_SCALE           = 25.0
-
---- Effects with a magnitude are never generated below this value.
-local MIN_MAGNITUDE            = 1
-
---- Effects with a duration are never generated below this value.
-local MIN_DURATION             = 1
-
---- Gold value is (topScore.score * effect.baseCost), clamped so that
---- an effect with a very low baseCost still contributes something, then
---- multiplied by HARMFUL_VALUE_MULTIPLIER if the top-scoring effect is
---- harmful (poisons are worth less than beneficial potions of the same
---- strength).
-local HARMFUL_VALUE_MULTIPLIER = 0.3
-local MIN_EFFECTIVE_BASE_COST  = 1
 
 --- Value thresholds used to pick a mesh/icon "quality tier" for the
 --- generated potion, cheapest first. The last entry's maxValue should be
@@ -221,6 +219,10 @@ local function easeInCirc(x)
     return 1 - math.sqrt(1 - math.pow(x, 2));
 end
 
+local function easeMax(x, max)
+    return math.ceil(math.min(x / (1 + easeInCirc(x / max)), max))
+end
+
 ---@param scores BakedScore[]
 ---@param effectMap table[]
 ---@return MagicEffectWithParams[]
@@ -240,29 +242,27 @@ local function buildEffectsList(scores, effectMap)
             area              = 0,
         }
 
+        local clampedCost = util.remap(util.clamp(effectRecord.baseCost, 1, 10), 1, 10, 0.8, 1.2)
+
         -- more duration or magnitude if one is missing
-        local magScale = (effectRecord.hasDuration and MAGNITUDE_SCALE or 2 * MAGNITUDE_SCALE)
-        local durScale = (effectRecord.hasMagnitude and DURATION_SCALE or 2 * DURATION_SCALE)
+        local magScale = (effectRecord.hasDuration and consts.MAGNITUDE_SCALE or 2 * consts.MAGNITUDE_SCALE) /
+            clampedCost
+        local durScale = (effectRecord.hasMagnitude and consts.DURATION_SCALE or 2 * consts.DURATION_SCALE) / clampedCost
+
+
 
         if effectRecord.hasMagnitude then
-            local magnitude = math.max(MIN_MAGNITUDE,
-                math.floor(score.score * magScale + 0.5))
+            local magnitude = math.max(consts.MIN_MAGNITUDE, score.score * magScale)
 
-            --- scale it down as we approach MAX_MAGNITUDE
-            magnitude = magnitude / (1 + easeInCirc(magnitude / MAX_MAGNITUDE))
-            magnitude = math.min(magnitude, MAX_MAGNITUDE)
+            magnitude = easeMax(magnitude, consts.MAX_MAGNITUDE)
 
             mewp.magnitudeMin = magnitude
             mewp.magnitudeMax = magnitude
         end
 
         if effectRecord.hasDuration then
-            mewp.duration = math.max(MIN_DURATION,
-                math.floor(score.score * durScale + 0.5))
-
-            --- scale it down as we approach 500
-            mewp.duration = mewp.duration / (1 + easeInCirc(mewp.duration / MAX_DURATION))
-            mewp.duration = math.min(mewp.duration, MAX_MAGNITUDE)
+            mewp.duration = math.max(consts.MIN_DURATION, score.score * durScale)
+            mewp.duration = easeMax(mewp.duration, consts.MAX_DURATION)
         end
 
         table.insert(effects, mewp)
@@ -284,13 +284,18 @@ local function newPotionTemplate(scores, effectMap)
 
     local effects      = buildEffectsList(scores, effectMap)
 
-    --- TODO: the value should be the SUM of this equation vs EACH
-    --- effect in effects, not just the anchor effect.
-    local value        = math.ceil(VALUE_SCALE * anchorScore.score *
-        math.max(MIN_EFFECTIVE_BASE_COST, anchorEffect.baseCost) *
-        (anchorEffect.harmful and HARMFUL_VALUE_MULTIPLIER or 1))
+    local value        = 0
+    for i, effect in ipairs(effects) do
+        local contrib = consts.VALUE_SCALE * scores[i].score *
+            math.max(consts.MIN_EFFECTIVE_BASE_COST, effectMap[i].baseCost)
+        if effectMap[i].harmful then
+            contrib = contrib * (-1) * consts.HARMFUL_VALUE_MULTIPLIER
+        end
+        value = value + contrib
+    end
+    value      = math.abs(value)
 
-    local tier         = tierForValue(value)
+    local tier = tierForValue(value)
 
     return {
         icon       = tier.icon,

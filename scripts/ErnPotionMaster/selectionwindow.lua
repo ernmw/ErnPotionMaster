@@ -342,6 +342,7 @@ local function buildEffectList(self)
             return list:createIconItemLayout({
                 index = i,
                 icon = mewp.effect.icon,
+                iconSize = const.IngredientSize,
                 props = { text = templates.effectToString(mewp) },
                 onMousePress = function(e, layout)
                     if e.button == 1 then

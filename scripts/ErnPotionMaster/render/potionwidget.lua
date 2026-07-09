@@ -19,13 +19,10 @@ local ui                      = require("openmw.ui")
 local util                    = require("openmw.util")
 local templates               = require("scripts.ErnPotionMaster.render.templates")
 local myui                    = require("scripts.ErnPotionMaster.pcp.myui")
-local core                    = require("openmw.core")
 local const                   = require("scripts.ErnPotionMaster.const")
 local sprite                  = require("scripts.ErnPotionMaster.render.sprite")
 local settings                = require("scripts.ErnPotionMaster.settings.settings")
 local aux_util                = require('openmw_aux.util')
-local MOD_NAME                = require("scripts.ErnPotionMaster.ns")
-local localization            = core.l10n(MOD_NAME)
 
 ---@class PotionRenderer
 ---@field _potionRecord table
@@ -38,6 +35,8 @@ local localization            = core.l10n(MOD_NAME)
 ---@class PotionRendererMethods
 local PotionRendererMethods   = {}
 PotionRendererMethods.__index = PotionRendererMethods
+
+local whiteTexture             = ui.texture { path = 'white' }
 
 local function deepCopy(orig)
     local orig_type = type(orig)
@@ -75,20 +74,14 @@ local function NewPotionRenderer(potionRecord, props, count, color)
         })
 
     count          = count or 1
-    local name     = potionRecord.name
-    if count > 1 then
-        name = localization("itemQuantity", {
-            name = name,
-            quantity = tostring(math.ceil(count))
-        })
-    end
 
     local new = {
         _potionRecord = potionRecord,
         _mewpLayouts  = effectLayouts,
         _sparklesAnim = glowAnim,
         _props        = deepCopy(props or {}),
-        _title        = name
+        _title        = potionRecord.name,
+        _count        = count,
     }
     setmetatable(new, PotionRendererMethods)
 
@@ -99,6 +92,65 @@ end
 ---@param dt number?
 ---@return table? nil if loop expired
 function PotionRendererMethods:GetLayout(dt)
+    -- Icon content: the animated glow, the icon itself (twice, for the
+    -- silhouette/color-tint trick), and -- if we have more than one --
+    -- a count badge overlaid on the lower-right corner, matching the
+    -- ingredient list's icon badges.
+    local iconChildren = {
+        self._sparklesAnim:GetLayout(dt),
+        {
+            type = ui.TYPE.Image,
+            props = {
+                resource = ui.texture {
+                    path = self._potionRecord.icon,
+                },
+                color = util.color.hex("000000"),
+                anchor = util.vector2(0.5, 0.5),
+                relativePosition = util.vector2(0.5, 0.5),
+                relativeSize = util.vector2(1, 1)
+            },
+        },
+        {
+            type = ui.TYPE.Image,
+            props = {
+                resource = ui.texture {
+                    path = self._potionRecord.icon
+                },
+                anchor = util.vector2(0.5, 0.5),
+                relativePosition = util.vector2(0.5, 0.5),
+                relativeSize = util.vector2(0.8, 0.8)
+            },
+        },
+    }
+
+    if self._count and self._count > 1 then
+        table.insert(iconChildren, {
+            type = ui.TYPE.Text,
+            props = {
+                text             = tostring(math.ceil(self._count)),
+                textColor        = myui.interactiveTextColors.normal.over,
+                textShadow       = true,
+                textAlignV       = ui.ALIGNMENT.End,
+                textAlignH       = ui.ALIGNMENT.End,
+                relativeSize     = util.vector2(1, 1),
+                relativePosition = util.vector2(1, 1),
+                anchor           = util.vector2(1, 1),
+                textSize         = 14,
+            },
+            content = ui.content {
+                {
+                    type = ui.TYPE.Image,
+                    props = {
+                        resource = whiteTexture,
+                        color = util.color.rgb(0, 0, 0),
+                        alpha = 0.4,
+                        relativeSize = util.vector2(1, 1)
+                    },
+                }
+            }
+        })
+    end
+
     return {
         type = ui.TYPE.Flex,
         props = self._props,
@@ -108,40 +160,13 @@ function PotionRendererMethods:GetLayout(dt)
                 props = {
                     size = const.PotionReviewIconSize,
                 },
-                content = ui.content {
-
-                    self._sparklesAnim:GetLayout(dt),
-                    {
-                        type = ui.TYPE.Image,
-                        props = {
-                            resource = ui.texture {
-                                path = self._potionRecord.icon,
-                            },
-                            color = util.color.hex("000000"),
-                            anchor = util.vector2(0.5, 0.5),
-                            relativePosition = util.vector2(0.5, 0.5),
-                            relativeSize = util.vector2(1, 1)
-                        },
-                    },
-                    {
-                        type = ui.TYPE.Image,
-                        props = {
-                            resource = ui.texture {
-                                path = self._potionRecord.icon
-                            },
-                            anchor = util.vector2(0.5, 0.5),
-                            relativePosition = util.vector2(0.5, 0.5),
-                            relativeSize = util.vector2(0.8, 0.8)
-                        },
-                    },
-                }
+                content = ui.content(iconChildren)
             },
 
             myui.padWidget(const.Padding, const.Padding),
             {
                 type = ui.TYPE.Text,
                 props = {
-                    -- itemQuantity: "{name} x{quantity}"
                     text = self._title,
                     textColor = myui.interactiveTextColors.normal.default,
                     textAlignV = ui.ALIGNMENT.Center,

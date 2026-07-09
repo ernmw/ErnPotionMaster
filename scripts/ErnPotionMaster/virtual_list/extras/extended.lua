@@ -32,6 +32,16 @@ local FontColors = require(dir .. ".extras.font_color")
 ---@field onMousePress fun(e: table, layout: Layout)?
 ---@field getTextLayout (fun(i: number?): Layout?)?
 
+--- Parameters for `VirtualListExt:createIconItemLayout`.
+---
+---@class createIconItemLayoutParams
+---@field index number
+---@field icon string? texture path shown on the left of the row
+---@field iconSize Vector2? defaults to a square sized to the item's height
+---@field badgeText string? optional text overlaid on the icon's lower-right corner (e.g. a stack count)
+---@field props { text: string, textSize?: number }
+---@field onMousePress fun(e: table, layout: Layout)?
+
 --- Parameters for `VirtualListExt:createSearchBox`.
 ---
 ---@class createSearchBoxParams
@@ -156,6 +166,137 @@ function VirtualListExt:createItemLayout(params)
 end
 
 
+--- Create an icon + text layout that supports mouse selection, for rows that
+--- need a leading icon (e.g. a magic effect icon or an ingredient icon),
+--- optionally with a small badge of text overlaid on the icon's lower-right
+--- corner (e.g. an inventory count).
+---
+---@param params createIconItemLayoutParams
+---@return Layout
+function VirtualListExt:createIconItemLayout(params)
+    local index = params.index
+    local text = params.props.text
+    local textSize = params.props.textSize or TEXT_SIZE
+    local onMousePress = params.onMousePress
+    local iconPath = params.icon
+    local badgeText = params.badgeText
+
+    local itemSize = self:getItemSize()
+    local iconSize = params.iconSize or util.vector2(itemSize.y - 2, itemSize.y - 2)
+
+    local textLayout = {
+        type = ui.TYPE.Text,
+        name = "text",
+        props = {
+            text = text,
+            textSize = textSize,
+            textColor = self:getColor(index),
+            textAlignV = ui.ALIGNMENT.Center,
+        },
+        external = { grow = 1 },
+    }
+
+    -- Build the icon's child content conditionally: the icon image itself,
+    -- plus an optional badge of text anchored to its lower-right corner.
+    local iconContent = {}
+    if iconPath then
+        iconContent[#iconContent + 1] = {
+            type = ui.TYPE.Image,
+            props = {
+                resource = ui.texture { path = iconPath },
+                size = iconSize,
+            },
+        }
+    end
+    if badgeText then
+        iconContent[#iconContent + 1] = {
+            type = ui.TYPE.Text,
+            props = {
+                text = badgeText,
+                textSize = 12,
+                textColor = util.color.rgb(1, 1, 1),
+                textShadow = true,
+                textAlignV = ui.ALIGNMENT.End,
+                textAlignH = ui.ALIGNMENT.End,
+                relativeSize = util.vector2(1, 1),
+                relativePosition = util.vector2(1, 1),
+                anchor = util.vector2(1, 1),
+            },
+        }
+    end
+
+    local iconWidget = {
+        type = ui.TYPE.Widget,
+        name = "icon",
+        props = { size = iconSize },
+        content = ui.content(iconContent),
+    }
+
+    local rowFlex = {
+        type = ui.TYPE.Flex,
+        name = "row",
+        props = {
+            horizontal = true,
+            arrange = ui.ALIGNMENT.Center,
+            autoSize = false,
+            size = itemSize,
+        },
+        content = ui.content {
+            iconWidget,
+            { name = "iconPad", props = { size = util.vector2(PAD_SIZE, 0) } },
+            textLayout,
+        },
+    }
+
+    -- Because the text layout is nested inside `row` rather than being the
+    -- item's direct content[1] (as createItemLayout's plain text rows are),
+    -- ListState:changeSelection needs an explicit way to find it again by
+    -- index for recoloring -- both for the newly-selected row and whichever
+    -- row was previously selected.
+    local function getTextLayout(i)
+        local rowWidget = self.element.layout.userData.scrollData:getItemLayout(i)
+        local flex = rowWidget and rowWidget.content and rowWidget.content.row
+        return flex and flex.content and flex.content.text
+    end
+
+    -- The wrapper is needed so mouse events aren't isolated to just the text pixels.
+    return {
+        type = ui.TYPE.Widget,
+        props = {
+            size = itemSize,
+        },
+        events = {
+            mouseMove = async:callback(function()
+                if self:getPressedIndex() == nil then
+                    self:updateOverColor(textLayout, index)
+                end
+            end),
+            focusLoss = async:callback(function()
+                if self:getPressedIndex() == nil then
+                    self:updateColor(textLayout, index)
+                end
+            end),
+            mousePress = async:callback(function(e)
+                if e.button == 1 then
+                    ambient.playSound("menu click")
+                    self:setPressedIndex(index)
+                    self:changeSelection(index, getTextLayout)
+                end
+                if onMousePress then
+                    onMousePress(e, textLayout)
+                end
+            end),
+            mouseRelease = async:callback(function(e)
+                if e.button ~= 1 then return end
+                self:setPressedIndex(nil)
+                self:updateColor(textLayout, index)
+            end),
+        },
+        content = ui.content({ rowFlex }),
+    }
+end
+
+
 --- Create a basic search box with placeholder text integration.
 ---
 ---@param params createSearchBoxParams
@@ -238,6 +379,63 @@ function VirtualListExt:createPlaceholder(params)
                     textSize = params.textSize or TEXT_SIZE,
                     textColor = FontColors.getDisabledColor(),
                     position = util.vector2(PAD_SIZE, 0),
+                },
+            },
+        },
+    }
+end
+
+
+--- Creates a read-only placeholder row with a (greyed-out) icon to its left,
+--- for the icon-list equivalent of `createPlaceholder`.
+---
+---@param params { text: string, textSize?: number, icon?: string, iconSize?: Vector2 }
+---@return Layout
+function VirtualListExt:createIconPlaceholder(params)
+    local itemSize = self:getItemSize()
+    local iconSize = params.iconSize or util.vector2(itemSize.y - 2, itemSize.y - 2)
+
+    local iconContent = {}
+    if params.icon then
+        iconContent[#iconContent + 1] = {
+            type = ui.TYPE.Image,
+            props = {
+                resource = ui.texture { path = params.icon },
+                size = iconSize,
+                alpha = 0.4,
+            },
+        }
+    end
+
+    return {
+        type = ui.TYPE.Widget,
+        props = { size = itemSize },
+        content = ui.content {
+            {
+                type = ui.TYPE.Flex,
+                props = {
+                    horizontal = true,
+                    arrange = ui.ALIGNMENT.Center,
+                    autoSize = false,
+                    size = itemSize,
+                },
+                content = ui.content {
+                    {
+                        type = ui.TYPE.Widget,
+                        props = { size = iconSize },
+                        content = ui.content(iconContent),
+                    },
+                    { props = { size = util.vector2(PAD_SIZE, 0) } },
+                    {
+                        type = ui.TYPE.Text,
+                        props = {
+                            text = params.text,
+                            textSize = params.textSize or TEXT_SIZE,
+                            textColor = FontColors.getDisabledColor(),
+                            textAlignV = ui.ALIGNMENT.Center,
+                        },
+                        external = { grow = 1 },
+                    },
                 },
             },
         },

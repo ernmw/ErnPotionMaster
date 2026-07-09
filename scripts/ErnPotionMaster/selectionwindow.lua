@@ -322,9 +322,11 @@ local function buildEffectList(self)
         itemSize     = const.ScrollListItemSize,
         itemCount    = #self.primaryEffects,
         itemLayout   = function(i, list)
-            return list:createItemLayout({
+            local mewp = self.primaryEffects[i]
+            return list:createIconItemLayout({
                 index = i,
-                props = { text = templates.effectToString(self.primaryEffects[i]) },
+                icon = mewp.effect.icon,
+                props = { text = templates.effectToString(mewp) },
                 onMousePress = function(e, layout)
                     if e.button == 1 then
                         -- Mouse click: select and immediately advance.
@@ -354,9 +356,12 @@ local function buildIngredient1List(self)
         itemCount    = #self.filteredIngredients,
         itemLayout   = function(i, list)
             local ing = self.filteredIngredients[i]
-            return list:createItemLayout({
+            return list:createIconItemLayout({
                 index = i,
-                props = { text = ing.record.name .. " (x" .. tostring(ing.count) .. ")" },
+                icon = ing.record.icon,
+                iconSize = const.IngredientSize,
+                badgeText = tostring(ing.count),
+                props = { text = ing.record.name },
                 onMousePress = function(e, layout)
                     if e.button == 1 then
                         self:_setIngredient1(i)
@@ -387,15 +392,20 @@ local function buildIngredient2List(self)
         itemLayout   = function(i, list)
             local ing = self.filteredIngredients[i]
             -- Grey out the item that is already chosen as ingredient 1.
-            local label = ing.record.name .. " (x" .. tostring(ing.count) .. ")"
             if i == self.ingredient1Index then
                 -- Still render it but make it unselectable (show marker).
-                label = "-- " .. label
-                return list:createPlaceholder({ text = label })
+                return list:createIconPlaceholder({
+                    text = "-- " .. ing.record.name,
+                    icon = ing.record.icon,
+                    iconSize = const.IngredientSize,
+                })
             end
-            return list:createItemLayout({
+            return list:createIconItemLayout({
                 index = i,
-                props = { text = label },
+                icon = ing.record.icon,
+                iconSize = const.IngredientSize,
+                badgeText = tostring(ing.count),
+                props = { text = ing.record.name },
                 onMousePress = function(e, layout)
                     if e.button == 1 and i ~= self.ingredient1Index then
                         self:_setIngredient2(i)

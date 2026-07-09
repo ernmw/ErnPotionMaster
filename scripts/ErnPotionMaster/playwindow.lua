@@ -202,13 +202,11 @@ end
 ---@param original EffectScore
 ---@return EffectScore
 local function effectPinHit(original)
-    --- TODO: scale intended effect points per pin up, and unintended down, based on something.
     if original.score < 1 then
-        -- Two hits on a pin will always unlock the effect (if it's an intended effect).
-        original.score = original.score + 0.5
+        original.score = 1
     else
-        original.multiplier = original.multiplier + 0.05
-        original.score = (original.score + 0.25) * (1 + original.multiplier)
+        original.multiplier = original.multiplier + 0.01
+        original.score = original.score + 0.2 + (1 + original.multiplier)
     end
     settings.debugPrint("effect " ..
         tostring(original.magicEffectParams.id) .. " score is now " .. tostring(original.score))
@@ -620,7 +618,7 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
     for _, obj in ipairs(gs.actualizedIngredients) do
         table.insert(recs, obj.record)
     end
-    gs.magicEffectsWithParams = common.getMagicEffectsFromIngredients(recs)
+    gs.magicEffectsWithParams = common.getSharedMagicEffectsFromActualizedIngredients(gs.actualizedIngredients)
 
     local idxOfDesired = search.contains(gs.magicEffectsWithParams, function(item)
         return common.magicEffectsEqual(desiredMagicEffectWithParams, item)
@@ -631,45 +629,36 @@ function PlayWindow:_init(ingredients, toolStrengths, desiredMagicEffectWithPara
     gs.effectScores = effectScore.new(gs.magicEffectsWithParams, idxOfDesired)
 
     -- Pin counts
-    local playerAlchemyFactor = util.remap(
-        util.clamp(pself.type.stats.skills.alchemy(pself).modified, 0, 130), 0, 130, 1, 1.5)
-    local replaceChance = util.remap(
-        util.clamp(playerAlchemyFactor * toolStrengths[const.ToolClass.MORTAR], 0.5, 3), 0.5, 3, 0, 0.95)
+    local primaryPinCount = math.ceil(util.remap(
+        util.clamp(pself.type.stats.skills.alchemy(pself).modified, 0, 130), 0, 130, const.MinimumPrimaryEffectPins,
+        const.MaximumPrimaryEffectPins))
+
+    -- TODO: find a new effect for the mortar.
+    local sideeffectMatchingMagnitudeChance = util.remap(
+        util.clamp(toolStrengths[const.ToolClass.MORTAR], 0.5, 3), 0.5, 3, 0.2, 0.8)
 
     ---@type {[number]:number}
     local effectPinCounts = {}
-
-    --- Effects with a high base cost are worth more per point of score, so
-    --- a smaller board presence still lets them meaningfully affect the
-    --- potion. Effects with neither magnitude nor duration only need two
-    --- successful hits to register at all in the resulting potion (see
-    --- recipes.lua's hashScore(), which drops the score entirely from the
-    --- recipe hash for such effects) -- extra pins for them just clutter
-    --- the board for no benefit, so they're pushed further toward the
-    --- minimum. Every effect still gets at least 3 pins so it's always
-    --- possible to hit it.
-    ---@param mewp MagicEffectWithParams
-    ---@return number
-    local function pinsForEffect(mewp)
-        local effect = mewp.effect
-        local baseCost = util.clamp(effect.baseCost or 1, 1, 20)
-        local costFactor = util.remap(baseCost, 1, 20, 1, 0.35)
-        if not effect.hasMagnitude and not effect.hasDuration then
-            costFactor = costFactor * 0.5
-        end
-        return math.max(3, math.floor(const.PinsPerEffect * costFactor + 0.5))
-    end
-
     for idx, mewp in ipairs(gs.magicEffectsWithParams) do
         if idx == gs.desiredMagicEffectWithParamsIdx then
-            effectPinCounts[idx] = math.ceil(const.PinsPerEffect * 1.5)
+            effectPinCounts[idx] = primaryPinCount
         else
-            local pinBudget = pinsForEffect(mewp)
-            for _ = 1, pinBudget, 1 do
-                --- maybe replace side-effect pins with our primary effect
-                --- TODO: also reduce beneficial effects if we're making a poison (and vice-versa).
-                local target = math.random() < replaceChance and gs.desiredMagicEffectWithParamsIdx or idx
-                effectPinCounts[target] = (effectPinCounts[target] or 0) + 1
+            local goodCount = math.random() < sideeffectMatchingMagnitudeChance
+
+            if (mewp.effect.harmful == gs.isPotion) then
+                if goodCount then
+                    -- not beneficial effect and you rolled well = fewer pins
+                    effectPinCounts[idx] = const.BadSideEffectPins
+                else
+                    effectPinCounts[idx] = const.GoodSideEffectPins
+                end
+            else
+                if goodCount then
+                    -- beneficial effect and you rolled well = more pins
+                    effectPinCounts[idx] = const.GoodSideEffectPins
+                else
+                    effectPinCounts[idx] = const.BadSideEffectPins
+                end
             end
         end
     end

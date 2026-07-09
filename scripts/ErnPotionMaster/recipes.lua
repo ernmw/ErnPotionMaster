@@ -32,15 +32,15 @@ local localization = core.l10n(MOD_NAME)
 local consts = {
     MAX_MAGNITUDE            = 200,
     MAX_DURATION             = 500,
-    VALUE_SCALE              = 5,
+    VALUE_SCALE              = 1,
 
     --- Multiplier applied to an effect's score to get its magnitude.
     --- Magnitude min and max are always set equal to each other, since the
     --- minigame produces a single, precise score rather than a random range.
-    MAGNITUDE_SCALE          = 10.0,
+    MAGNITUDE_SCALE          = 3.0,
 
     --- Multiplier applied to an effect's score to get its duration, in seconds.
-    DURATION_SCALE           = 25.0,
+    DURATION_SCALE           = 5.0,
 
     --- Effects with a magnitude are never generated below this value.
     MIN_MAGNITUDE            = 1,
@@ -242,7 +242,7 @@ local function buildEffectsList(scores, effectMap)
             area              = 0,
         }
 
-        local clampedCost = util.remap(util.clamp(effectRecord.baseCost, 1, 10), 1, 10, 0.8, 1.2)
+        local clampedCost = util.remap(util.clamp(effectRecord.baseCost, 1, 20), 1, 20, 0.8, 2)
 
         -- more duration or magnitude if one is missing
         local magScale = (effectRecord.hasDuration and consts.MAGNITUDE_SCALE or 2 * consts.MAGNITUDE_SCALE) /
@@ -289,11 +289,14 @@ local function newPotionTemplate(scores, effectMap)
         local contrib = consts.VALUE_SCALE * scores[i].score *
             math.max(consts.MIN_EFFECTIVE_BASE_COST, effectMap[i].baseCost)
         if effectMap[i].harmful then
-            contrib = contrib * (-1) * consts.HARMFUL_VALUE_MULTIPLIER
+            contrib = contrib * (-1)
         end
         value = value + contrib
     end
-    value      = math.abs(value)
+    if value < 0 then
+        value = value * consts.HARMFUL_VALUE_MULTIPLIER
+    end
+    value = math.ceil(math.pow(math.abs(value), 0.8))
 
     local tier = tierForValue(value)
 

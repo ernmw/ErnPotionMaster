@@ -166,6 +166,24 @@ function VirtualListExt:createItemLayout(params)
 end
 
 
+--- Locate the inner text layout of a row created by `createIconItemLayout`,
+--- given the row's index. The text layout is nested inside the row's Flex
+--- rather than being the row's direct content[1], so `ListState:changeSelection`
+--- cannot find it via its default lookup -- callers that call `changeSelection`
+--- on an icon list from outside the row's own onMousePress closure (e.g. when
+--- setting the selection programmatically) must pass this in as the
+--- `getTextLayout` argument, or the default lookup will end up stamping
+--- `textColor` onto the row Flex itself, which the engine will warn about.
+---
+---@param i number?
+---@return Layout?
+function VirtualListExt:getIconRowTextLayout(i)
+    local rowWidget = self.element.layout.userData.scrollData:getItemLayout(i)
+    local flex = rowWidget and rowWidget.content and rowWidget.content.row
+    return flex and flex.content and flex.content.text
+end
+
+
 --- Create an icon + text layout that supports mouse selection, for rows that
 --- need a leading icon (e.g. a magic effect icon or an ingredient icon),
 --- optionally with a small badge of text overlaid on the icon's lower-right
@@ -254,9 +272,7 @@ function VirtualListExt:createIconItemLayout(params)
     -- index for recoloring -- both for the newly-selected row and whichever
     -- row was previously selected.
     local function getTextLayout(i)
-        local rowWidget = self.element.layout.userData.scrollData:getItemLayout(i)
-        local flex = rowWidget and rowWidget.content and rowWidget.content.row
-        return flex and flex.content and flex.content.text
+        return self:getIconRowTextLayout(i)
     end
 
     -- The wrapper is needed so mouse events aren't isolated to just the text pixels.

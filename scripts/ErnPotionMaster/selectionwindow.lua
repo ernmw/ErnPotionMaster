@@ -288,6 +288,22 @@ local function scrollActiveList(self, direction)
     end
 end
 
+--- Every scroll list in this window is built via createIconItemLayout, whose
+--- rows nest their text layout inside a Flex rather than exposing it as
+--- content[1]. `changeSelection` calls made from *within* a row's own
+--- onMousePress closure already thread the right lookup through automatically,
+--- but calls made from outside (e.g. setting the selection programmatically
+--- from a setter method, or clearing it back to nil) must pass this in
+--- explicitly -- otherwise ListState's default lookup ends up stamping
+--- `textColor` onto the row Flex itself, which the engine warns about.
+---@param list VirtualListExt
+---@return fun(i: number?): Layout?
+local function iconGetTextLayout(list)
+    return function(i)
+        return list:getIconRowTextLayout(i)
+    end
+end
+
 --- Whether the current state has a valid selection committed.
 ---@param self SelectionWindow
 ---@return boolean
@@ -446,7 +462,7 @@ function SelectionWindow:_clearIngredient1(rebuildList)
     self.ingredient1Index = nil
     self:_clearIngredient2(false)
     if self.scrollListIngredient1 then
-        self.scrollListIngredient1:changeSelection(nil)
+        self.scrollListIngredient1:changeSelection(nil, iconGetTextLayout(self.scrollListIngredient1))
     end
     if rebuildList then
         buildIngredient2List(self)
@@ -466,7 +482,7 @@ function SelectionWindow:_clearIngredient2(rebuildList)
     self._batchOptions    = {}
     self._brewed          = false
     if self.scrollListIngredient2 then
-        self.scrollListIngredient2:changeSelection(nil)
+        self.scrollListIngredient2:changeSelection(nil, iconGetTextLayout(self.scrollListIngredient2))
     end
     if rebuildList then
         buildIngredient2List(self)
@@ -481,7 +497,7 @@ function SelectionWindow:_setPrimaryEffect(effectIndex)
     end
 
     self.effectIndex = effectIndex
-    self.scrollListEffects:changeSelection(effectIndex)
+    self.scrollListEffects:changeSelection(effectIndex, iconGetTextLayout(self.scrollListEffects))
 
     -- Recompute which ingredients carry this effect.
     local chosenEffect = self.primaryEffects[effectIndex]
@@ -512,7 +528,7 @@ function SelectionWindow:_setIngredient1(ingredientIndex)
     end
 
     self.ingredient1Index = ingredientIndex
-    self.scrollListIngredient1:changeSelection(ingredientIndex)
+    self.scrollListIngredient1:changeSelection(ingredientIndex, iconGetTextLayout(self.scrollListIngredient1))
 
     -- Ingredient 2 depends on ingredient 1 (it must exclude this index,
     -- and any prior ingredient-2 choice may now be invalid/stale).
@@ -532,7 +548,7 @@ function SelectionWindow:_setIngredient2(ingredientIndex)
     end
 
     self.ingredient2Index = ingredientIndex
-    self.scrollListIngredient2:changeSelection(ingredientIndex)
+    self.scrollListIngredient2:changeSelection(ingredientIndex, iconGetTextLayout(self.scrollListIngredient2))
 
     -- Batch size depends on both ingredient counts; reset it so a stale
     -- value can't leak in from a previous ingredient-2 choice. The actual

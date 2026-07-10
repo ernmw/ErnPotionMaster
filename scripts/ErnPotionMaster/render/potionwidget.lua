@@ -124,28 +124,43 @@ function PotionRendererMethods:GetLayout(dt)
     }
 
     if self._count and self._count > 1 then
+        -- The visible icon artwork is drawn at 80% size, centered in the box
+        -- (the black silhouette layer behind it is full-size, creating an
+        -- outline effect) -- so the badge needs to anchor to that same 80%
+        -- footprint, not the full box, or it lands past the icon's actual
+        -- corner.
         table.insert(iconChildren, {
-            type = ui.TYPE.Text,
+            type = ui.TYPE.Widget,
             props = {
-                text             = tostring(math.ceil(self._count)),
-                textColor        = myui.interactiveTextColors.normal.over,
-                textShadow       = true,
-                textAlignV       = ui.ALIGNMENT.End,
-                textAlignH       = ui.ALIGNMENT.End,
-                relativeSize     = util.vector2(1, 1),
-                relativePosition = util.vector2(1, 1),
-                anchor           = util.vector2(1, 1),
-                textSize         = 14,
+                size = const.PotionReviewIconSize * 0.8,
+                anchor = util.vector2(0.5, 0.5),
+                relativePosition = util.vector2(0.5, 0.5),
             },
             content = ui.content {
                 {
-                    type = ui.TYPE.Image,
+                    type = ui.TYPE.Text,
                     props = {
-                        resource = whiteTexture,
-                        color = util.color.rgb(0, 0, 0),
-                        alpha = 0.4,
-                        relativeSize = util.vector2(1, 1)
+                        text             = tostring(math.ceil(self._count)),
+                        textColor        = myui.interactiveTextColors.normal.over,
+                        textShadow       = true,
+                        textAlignV       = ui.ALIGNMENT.End,
+                        textAlignH       = ui.ALIGNMENT.End,
+                        relativeSize     = util.vector2(1, 1),
+                        relativePosition = util.vector2(1, 1),
+                        anchor           = util.vector2(1, 1),
+                        textSize         = 14,
                     },
+                    content = ui.content {
+                        {
+                            type = ui.TYPE.Image,
+                            props = {
+                                resource = whiteTexture,
+                                color = util.color.rgb(0, 0, 0),
+                                alpha = 0.4,
+                                relativeSize = util.vector2(1, 1)
+                            },
+                        }
+                    }
                 }
             }
         })

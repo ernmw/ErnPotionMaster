@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -17,9 +17,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 local util      = require("openmw.util")
 local core      = require("openmw.core")
-local colorutil = require("scripts.ErnPotionMaster.colorutil")
+local colorutil = require("scripts.ErnPotionPachinko.colorutil")
 local ui        = require("openmw.ui")
-local settings  = require("scripts.ErnPotionMaster.settings.settings")
+local settings  = require("scripts.ErnPotionPachinko.settings.settings")
 
 --- find scale
 ---@param layerName string?

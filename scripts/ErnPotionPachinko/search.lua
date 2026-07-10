@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify

@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -16,10 +16,10 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 
-local MOD_NAME = require("scripts.ErnPotionMaster.ns")
+local MOD_NAME = require("scripts.ErnPotionPachinko.ns")
 local types    = require("openmw.types")
 local aux_util = require('openmw_aux.util')
-local search   = require("scripts.ErnPotionMaster.search")
+local search   = require("scripts.ErnPotionPachinko.search")
 
 
 ---comment

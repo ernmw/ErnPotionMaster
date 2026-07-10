@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -22,28 +22,28 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -- It maintains a registry of balls and pins indexed by their ID,
 -- and sends this info as necessary to both the pachinko physics board and render board.
 
-local MOD_NAME       = require("scripts.ErnPotionMaster.ns")
-local const          = require("scripts.ErnPotionMaster.const")
+local MOD_NAME       = require("scripts.ErnPotionPachinko.ns")
+local const          = require("scripts.ErnPotionPachinko.const")
 local ui             = require("openmw.ui")
 local util           = require("openmw.util")
 local pself          = require("openmw.self")
 local core           = require("openmw.core")
 local types          = require("openmw.types")
-local placepins      = require("scripts.ErnPotionMaster.placepins")
-local settings       = require("scripts.ErnPotionMaster.settings.settings")
-local physics        = require("scripts.ErnPotionMaster.physics.pachinko")
+local placepins      = require("scripts.ErnPotionPachinko.placepins")
+local settings       = require("scripts.ErnPotionPachinko.settings.settings")
+local physics        = require("scripts.ErnPotionPachinko.physics.pachinko")
 local interfaces     = require('openmw.interfaces')
-local shuffle        = require("scripts.ErnPotionMaster.shuffle")
+local shuffle        = require("scripts.ErnPotionPachinko.shuffle")
 local aux_util       = require('openmw_aux.util')
-local renderBoard    = require("scripts.ErnPotionMaster.render.board")
-local templates      = require("scripts.ErnPotionMaster.render.templates")
-local effectScore    = require("scripts.ErnPotionMaster.effectscore")
-local ingredientInfo = require("scripts.ErnPotionMaster.ingredientinfo")
-local search         = require("scripts.ErnPotionMaster.search")
-local common         = require("scripts.ErnPotionMaster.common")
-local sprite         = require("scripts.ErnPotionMaster.render.sprite")
-local keytrack       = require("scripts.ErnPotionMaster.keytrack")
-local trajectory     = require("scripts.ErnPotionMaster.render.trajectory")
+local renderBoard    = require("scripts.ErnPotionPachinko.render.board")
+local templates      = require("scripts.ErnPotionPachinko.render.templates")
+local effectScore    = require("scripts.ErnPotionPachinko.effectscore")
+local ingredientInfo = require("scripts.ErnPotionPachinko.ingredientinfo")
+local search         = require("scripts.ErnPotionPachinko.search")
+local common         = require("scripts.ErnPotionPachinko.common")
+local sprite         = require("scripts.ErnPotionPachinko.render.sprite")
+local keytrack       = require("scripts.ErnPotionPachinko.keytrack")
+local trajectory     = require("scripts.ErnPotionPachinko.render.trajectory")
 local input          = require("openmw.input")
 local async          = require("openmw.async")
 local ambient        = require("openmw.ambient")
@@ -133,7 +133,7 @@ local PinClass = {
 ---@field toolStrengths {[PinClass]:number}
 
 -- Module-level animated image (stateless across instances, safe to share)
-local resilientShine = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\circle-sweep.dds",
+local resilientShine = sprite.NewAnimatedImage("textures\\ErnPotionPachinko\\circle-sweep.dds",
     util.vector2(2 * 64, 2 * 64),
     4, 10, nil, nil, {
         anchor = util.vector2(0.5, 0.5),
@@ -143,14 +143,14 @@ local resilientShine = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\circl
     })
 
 local function makeExplodeAnim(props)
-    return sprite.NewAnimatedImage("textures\\ErnPotionMaster\\blast.dds",
+    return sprite.NewAnimatedImage("textures\\ErnPotionPachinko\\blast.dds",
         util.vector2(2 * 256, 2 * 256),
         4, 20, 1, nil, props)
 end
 
 local function makeHitAnim(left, props)
     return sprite.NewAnimatedImage(
-        left and "textures\\ErnPotionMaster\\hit_left.dds" or "textures\\ErnPotionMaster\\hit_right.dds",
+        left and "textures\\ErnPotionPachinko\\hit_left.dds" or "textures\\ErnPotionPachinko\\hit_right.dds",
         util.vector2(2 * 256, 2 * 256),
         4, 20, 1, nil, props)
 end
@@ -308,7 +308,7 @@ function PlayWindow:_onPinHit(ballId, pinId)
         -- mortar is not a pin
     end
 
-    ambient.playSoundFile("Sound\\ErnPotionMaster\\boink.ogg")
+    ambient.playSoundFile("Sound\\ErnPotionPachinko\\boink.ogg")
 
     pinInfo.hitLeft = gs.physics.balls[ballId].position.x < gs.physics.pins[pinId].position.x
     pinInfo.hit = true

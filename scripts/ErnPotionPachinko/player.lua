@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -15,7 +15,7 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
-local MOD_NAME = require("scripts.ErnPotionMaster.ns")
+local MOD_NAME = require("scripts.ErnPotionPachinko.ns")
 local core = require("openmw.core")
 local pself = require("openmw.self")
 local util = require('openmw.util')
@@ -23,7 +23,7 @@ local async = require("openmw.async")
 local types = require('openmw.types')
 local input = require('openmw.input')
 local interfaces = require('openmw.interfaces')
-local settings = require("scripts.ErnPotionMaster.settings.settings")
+local settings = require("scripts.ErnPotionPachinko.settings.settings")
 
 if settings.admin.disable then
     print(MOD_NAME .. " is disabled.")

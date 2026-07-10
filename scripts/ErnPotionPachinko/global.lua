@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -18,16 +18,16 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 local world    = require('openmw.world')
 local types    = require('openmw.types')
 local aux_util = require('openmw_aux.util')
-local common   = require("scripts.ErnPotionMaster.common")
-local recipes  = require("scripts.ErnPotionMaster.recipes")
+local common   = require("scripts.ErnPotionPachinko.common")
+local recipes  = require("scripts.ErnPotionPachinko.recipes")
 
 if require("openmw.core").API_REVISION < 62 then
     error("OpenMW 0.49 or newer is required!")
 end
 
-local MOD_NAME = require("scripts.ErnPotionMaster.ns")
+local MOD_NAME = require("scripts.ErnPotionPachinko.ns")
 
-local alchemyScript = "scripts/ErnPotionMaster/alchemy.lua"
+local alchemyScript = "scripts/ErnPotionPachinko/alchemy.lua"
 
 local function onStartAlchemy(data)
     if not data.player:hasScript(alchemyScript) then

@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 local ui                   = require("openmw.ui")
 local util                 = require("openmw.util")
-local myui                 = require("scripts.ErnPotionMaster.pcp.myui")
+local myui                 = require("scripts.ErnPotionPachinko.pcp.myui")
 
 -- Dot appearance
 local DOT_SIZE             = util.vector2(6, 6)
@@ -38,7 +38,7 @@ local DOT_COLOR            = myui.interactiveTextColors.normal.over
 local ALPHA_START          = 0.85
 local ALPHA_END            = 0.15
 
-local circleTex            = ui.texture { path = "textures\\ErnPotionMaster\\circle-full.png" }
+local circleTex            = ui.texture { path = "textures\\ErnPotionPachinko\\circle-full.png" }
 
 ---@class TrajectoryRenderer
 ---@field element    any       The single widget element containing all dots. Embed this in your layout.

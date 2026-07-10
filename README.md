@@ -1,16 +1,18 @@
-# ErnPotionMaster
+# ErnPotionPachinko
 
 OpenMW mod that makes potion brewing fun.
 
+This is still in alpha.
+
 ## Installing
 
-Download the [latest version here](https://github.com/erinpentecost/ErnPotionMaster/archive/refs/heads/main.zip). The mod's Nexus page is [here](https://www.nexusmods.com/morrowind/mods/57315).
+Download the [latest version here](https://github.com/erinpentecost/ErnPotionPachinko/archive/refs/heads/main.zip).
 
 Extract to your `mods/` folder. In your `openmw.cfg` file, add these lines in the correct spots:
 
 ```ini
-data="/wherevermymodsare/mods/ErnPotionMaster-main"
-content=ErnPotionMaster.omwscripts
+data="/wherevermymodsare/mods/ErnPotionPachinko-main"
+content=ErnPotionPachinko.omwscripts
 ```
 
 ## Credits
@@ -25,17 +27,3 @@ content=ErnPotionMaster.omwscripts
 - https://opengameart.org/content/hit-animation-frame-by-frame
 - https://freesound.org/people/Fr%C3%A9d%C3%A9ricDubois/sounds/804920/ - metal high pitched boink by FrédéricDubois -- https://freesound.org/s/804920/ -- License: Attribution 4.0
 - https://kenney.nl/assets/particle-pack (CC0)
-
-### maybe...
-- https://cassala.itch.io/bubble-sprites (CC0)
-- https://ansimuz.itch.io/gothicvania-patreon-collection (CC0)
-- https://opengameart.org/sites/default/files/styles/thumbnail/public/effect-prespecive-2b.png
-
-
-magick /home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/frames/hit_003.png -flop /home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/frames/hit_003.png
-
-
-magick /home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/frames/hit_left.png -define dds:mipmaps=0 -define dds:compression=dxt5 /home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/frames/hit_left.dds
-
-
-magick "/home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/hit.dds" -crop 256x256 +repage "/home/ern/workspace/ErnPotionMaster/textures/ErnPotionMaster/hit_%03d.png"

@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -16,19 +16,19 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 
-local MOD_NAME                  = require("scripts.ErnPotionMaster.ns")
-local const                     = require("scripts.ErnPotionMaster.const")
+local MOD_NAME                  = require("scripts.ErnPotionPachinko.ns")
+local const                     = require("scripts.ErnPotionPachinko.const")
 local ui                        = require("openmw.ui")
 local util                      = require("openmw.util")
 local core                      = require("openmw.core")
 local interfaces                = require('openmw.interfaces')
-local settings                  = require("scripts.ErnPotionMaster.settings.settings")
-local common                    = require("scripts.ErnPotionMaster.common")
-local inventorysource           = require("scripts.ErnPotionMaster.inventorysource")
-local templates                 = require("scripts.ErnPotionMaster.render.templates")
-local myui                      = require("scripts.ErnPotionMaster.pcp.myui")
-local keytrack                  = require("scripts.ErnPotionMaster.keytrack")
-local virtualListExtras         = require("scripts.ErnPotionMaster.virtual_list.extras")
+local settings                  = require("scripts.ErnPotionPachinko.settings.settings")
+local common                    = require("scripts.ErnPotionPachinko.common")
+local inventorysource           = require("scripts.ErnPotionPachinko.inventorysource")
+local templates                 = require("scripts.ErnPotionPachinko.render.templates")
+local myui                      = require("scripts.ErnPotionPachinko.pcp.myui")
+local keytrack                  = require("scripts.ErnPotionPachinko.keytrack")
+local virtualListExtras         = require("scripts.ErnPotionPachinko.virtual_list.extras")
 local input                     = require("openmw.input")
 local async                     = require("openmw.async")
 local ambient                   = require("openmw.ambient")

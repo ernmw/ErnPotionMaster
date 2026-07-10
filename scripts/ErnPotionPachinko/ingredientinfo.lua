@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -22,23 +22,23 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 -- It maintains a registry of balls and pins indexed by their ID,
 -- and sends this info as necessary to both the pachinko physics board and render board.
 
-local MOD_NAME     = require("scripts.ErnPotionMaster.ns")
-local const        = require("scripts.ErnPotionMaster.const")
+local MOD_NAME     = require("scripts.ErnPotionPachinko.ns")
+local const        = require("scripts.ErnPotionPachinko.const")
 local ui           = require("openmw.ui")
 local util         = require("openmw.util")
 local pself        = require("openmw.self")
 local core         = require("openmw.core")
 local types        = require("openmw.types")
-local placepins    = require("scripts.ErnPotionMaster.placepins")
-local settings     = require("scripts.ErnPotionMaster.settings.settings")
-local physics      = require("scripts.ErnPotionMaster.physics.pachinko")
+local placepins    = require("scripts.ErnPotionPachinko.placepins")
+local settings     = require("scripts.ErnPotionPachinko.settings.settings")
+local physics      = require("scripts.ErnPotionPachinko.physics.pachinko")
 local interfaces   = require('openmw.interfaces')
-local shuffle      = require("scripts.ErnPotionMaster.shuffle")
+local shuffle      = require("scripts.ErnPotionPachinko.shuffle")
 local aux_util     = require('openmw_aux.util')
-local renderBoard  = require("scripts.ErnPotionMaster.render.board")
-local colorutil    = require("scripts.ErnPotionMaster.colorutil")
-local myui         = require("scripts.ErnPotionMaster.pcp.myui")
-local templates    = require("scripts.ErnPotionMaster.render.templates")
+local renderBoard  = require("scripts.ErnPotionPachinko.render.board")
+local colorutil    = require("scripts.ErnPotionPachinko.colorutil")
+local myui         = require("scripts.ErnPotionPachinko.pcp.myui")
+local templates    = require("scripts.ErnPotionPachinko.render.templates")
 local localization = core.l10n(MOD_NAME)
 
 ---@class IngredientRecord any This is a openmw.core#IngredientRecord
@@ -88,7 +88,7 @@ local whiteTexture              = ui.texture { path = 'white' }
 ---@return table
 function IngredientInfoContainer.ingredientLayout(ingredientInfo, props)
     local iconPath = (ingredientInfo.record and ingredientInfo.record.icon)
-        or "textures\\ErnPotionMaster\\cross.png"
+        or "textures\\ErnPotionPachinko\\cross.png"
     local displayName = (ingredientInfo.record and ingredientInfo.record.name)
         or ingredientText
 

@@ -1,0 +1,5 @@
+MENU:scripts/ErnPotionPachinko/settings/menu_settings.lua
+
+PLAYER:scripts/ErnPotionPachinko/player.lua
+GLOBAL:scripts/ErnPotionPachinko/global.lua
+CUSTOM:scripts/ErnPotionPachinko/alchemy.lua

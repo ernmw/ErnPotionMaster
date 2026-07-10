@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -16,7 +16,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 local ui                        = require("openmw.ui")
-local search                    = require("scripts.ErnPotionMaster.search")
+local search                    = require("scripts.ErnPotionPachinko.search")
 
 ---@class Renderable
 ---@field _id number?

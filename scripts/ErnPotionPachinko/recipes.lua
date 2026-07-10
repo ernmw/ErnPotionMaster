@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -17,13 +17,13 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 
 
-local MOD_NAME     = require("scripts.ErnPotionMaster.ns")
+local MOD_NAME     = require("scripts.ErnPotionPachinko.ns")
 local types        = require('openmw.types')
 local core         = require('openmw.core')
 local world        = require('openmw.world')
 local aux_util     = require('openmw_aux.util')
 local util         = require('openmw.util')
-local common       = require("scripts.ErnPotionMaster.common")
+local common       = require("scripts.ErnPotionPachinko.common")
 local localization = core.l10n(MOD_NAME)
 
 --- This file handles converting magic effect scores into potion records.

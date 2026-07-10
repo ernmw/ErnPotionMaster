@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -40,7 +40,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 local types  = require("openmw.types")
 local nearby = require("openmw.nearby")
 local pself  = require("openmw.self")
-local const  = require("scripts.ErnPotionMaster.const")
+local const  = require("scripts.ErnPotionPachinko.const")
 
 ------------------------------------------------------------------------
 -- Ownership

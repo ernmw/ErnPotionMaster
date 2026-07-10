@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -16,29 +16,29 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 
-local MOD_NAME            = require("scripts.ErnPotionMaster.ns")
-local const               = require("scripts.ErnPotionMaster.const")
+local MOD_NAME            = require("scripts.ErnPotionPachinko.ns")
+local const               = require("scripts.ErnPotionPachinko.const")
 local ui                  = require("openmw.ui")
 local util                = require("openmw.util")
 local pself               = require("openmw.self")
 local core                = require("openmw.core")
 local types               = require("openmw.types")
-local placepins           = require("scripts.ErnPotionMaster.placepins")
-local settings            = require("scripts.ErnPotionMaster.settings.settings")
-local physics             = require("scripts.ErnPotionMaster.physics.pachinko")
+local placepins           = require("scripts.ErnPotionPachinko.placepins")
+local settings            = require("scripts.ErnPotionPachinko.settings.settings")
+local physics             = require("scripts.ErnPotionPachinko.physics.pachinko")
 local interfaces          = require('openmw.interfaces')
-local shuffle             = require("scripts.ErnPotionMaster.shuffle")
+local shuffle             = require("scripts.ErnPotionPachinko.shuffle")
 local aux_util            = require('openmw_aux.util')
-local renderBoard         = require("scripts.ErnPotionMaster.render.board")
-local templates           = require("scripts.ErnPotionMaster.render.templates")
-local effectScore         = require("scripts.ErnPotionMaster.effectscore")
-local ingredientInfo      = require("scripts.ErnPotionMaster.ingredientinfo")
-local potiondonewindow    = require("scripts.ErnPotionMaster.potiondonewindow")
-local search              = require("scripts.ErnPotionMaster.search")
-local common              = require("scripts.ErnPotionMaster.common")
+local renderBoard         = require("scripts.ErnPotionPachinko.render.board")
+local templates           = require("scripts.ErnPotionPachinko.render.templates")
+local effectScore         = require("scripts.ErnPotionPachinko.effectscore")
+local ingredientInfo      = require("scripts.ErnPotionPachinko.ingredientinfo")
+local potiondonewindow    = require("scripts.ErnPotionPachinko.potiondonewindow")
+local search              = require("scripts.ErnPotionPachinko.search")
+local common              = require("scripts.ErnPotionPachinko.common")
 
-local playwindow          = require("scripts.ErnPotionMaster.playwindow")
-local selectionwindow     = require("scripts.ErnPotionMaster.selectionwindow")
+local playwindow          = require("scripts.ErnPotionPachinko.playwindow")
+local selectionwindow     = require("scripts.ErnPotionPachinko.selectionwindow")
 
 ------------------------------------------------------------------------
 -- State machine

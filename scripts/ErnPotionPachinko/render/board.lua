@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -15,14 +15,14 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
-local MOD_NAME      = require("scripts.ErnPotionMaster.ns")
-local const         = require("scripts.ErnPotionMaster.const")
+local MOD_NAME      = require("scripts.ErnPotionPachinko.ns")
+local const         = require("scripts.ErnPotionPachinko.const")
 local ui            = require("openmw.ui")
 local util          = require("openmw.util")
-local dynamic       = require("scripts.ErnPotionMaster.render.dynamic")
+local dynamic       = require("scripts.ErnPotionPachinko.render.dynamic")
 local interfaces    = require('openmw.interfaces')
 local aux_util      = require('openmw_aux.util')
-local settings      = require("scripts.ErnPotionMaster.settings.settings")
+local settings      = require("scripts.ErnPotionPachinko.settings.settings")
 
 ---@class RenderBoard
 ---@field boardElement any

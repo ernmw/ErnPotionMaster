@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -15,13 +15,13 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
-local MOD_NAME       = require("scripts.ErnPotionMaster.ns")
-local const          = require("scripts.ErnPotionMaster.const")
+local MOD_NAME       = require("scripts.ErnPotionPachinko.ns")
+local const          = require("scripts.ErnPotionPachinko.const")
 local ui             = require("openmw.ui")
 local util           = require("openmw.util")
-local dynamic        = require("scripts.ErnPotionMaster.render.dynamic")
+local dynamic        = require("scripts.ErnPotionPachinko.render.dynamic")
 local interfaces     = require('openmw.interfaces')
-local myui           = require("scripts.ErnPotionMaster.pcp.myui")
+local myui           = require("scripts.ErnPotionPachinko.pcp.myui")
 local core           = require("openmw.core")
 local localization   = core.l10n(MOD_NAME)
 
@@ -227,23 +227,23 @@ return {
     effectLayout = effectLayout,
     effectNumbersLayout = effectNumbersLayout,
     ballTexture = ui.texture {
-        path = "textures\\ErnPotionMaster\\circle-full.png"
+        path = "textures\\ErnPotionPachinko\\circle-full.png"
     },
     bufferPinTexture = ui.texture {
-        path = "textures\\ErnPotionMaster\\circle.png"
+        path = "textures\\ErnPotionPachinko\\circle.png"
     },
     shadeTexture = ui.texture {
-        path = "textures\\ErnPotionMaster\\circle-ball-shade-3.png"
+        path = "textures\\ErnPotionPachinko\\circle-ball-shade-3.png"
     },
     toolTextures = {
         [const.ToolClass.CALCINATOR] = ui.texture {
-            path = "textures\\ErnPotionMaster\\group.png"
+            path = "textures\\ErnPotionPachinko\\group.png"
         },
         [const.ToolClass.ALEMBIC] = ui.texture {
-            path = "textures\\ErnPotionMaster\\plus.png"
+            path = "textures\\ErnPotionPachinko\\plus.png"
         },
         [const.ToolClass.RETORT] = ui.texture {
-            path = "textures\\ErnPotionMaster\\triangle.png"
+            path = "textures\\ErnPotionPachinko\\triangle.png"
         }
     },
     effectToString = effectToString,

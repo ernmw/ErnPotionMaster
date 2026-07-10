@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -13,7 +13,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 local util = require("openmw.util")
-local settings = require("scripts.ErnPotionMaster.settings.settings")
+local settings = require("scripts.ErnPotionPachinko.settings.settings")
 
 ---Shuffle a table in place using Fisher-Yates.
 local function shuffle(t)

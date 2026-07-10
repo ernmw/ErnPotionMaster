@@ -1,5 +1,5 @@
 --[[
-ErnPotionMaster for OpenMW.
+ErnPotionPachinko for OpenMW.
 Copyright (C) 2026 Erin Pentecost
 
 This program is free software: you can redistribute it and/or modify
@@ -17,11 +17,11 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 local ui                      = require("openmw.ui")
 local util                    = require("openmw.util")
-local templates               = require("scripts.ErnPotionMaster.render.templates")
-local myui                    = require("scripts.ErnPotionMaster.pcp.myui")
-local const                   = require("scripts.ErnPotionMaster.const")
-local sprite                  = require("scripts.ErnPotionMaster.render.sprite")
-local settings                = require("scripts.ErnPotionMaster.settings.settings")
+local templates               = require("scripts.ErnPotionPachinko.render.templates")
+local myui                    = require("scripts.ErnPotionPachinko.pcp.myui")
+local const                   = require("scripts.ErnPotionPachinko.const")
+local sprite                  = require("scripts.ErnPotionPachinko.render.sprite")
+local settings                = require("scripts.ErnPotionPachinko.settings.settings")
 local aux_util                = require('openmw_aux.util')
 
 ---@class PotionRenderer
@@ -64,7 +64,7 @@ local function NewPotionRenderer(potionRecord, props, count, color)
     color          = color or (const.MagickColors[potionRecord.effects[1].effect.school].default
         or const.MagickColors.unknown.default)
 
-    local glowAnim = sprite.NewAnimatedImage("textures\\ErnPotionMaster\\effect_36.dds",
+    local glowAnim = sprite.NewAnimatedImage("textures\\ErnPotionPachinko\\effect_36.dds",
         util.vector2(512, 512),
         16, 10, nil, nil, {
             anchor = util.vector2(0.5, 0.5),

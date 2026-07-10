@@ -245,16 +245,16 @@ local function buildEffectsList(scores, effectMap)
         local clampedCost = util.remap(util.clamp(effectRecord.baseCost, 1, 20), 1, 20, 0.8, 2)
 
         -- more duration or magnitude if one is missing
-        local magScale = (effectRecord.hasDuration and consts.MAGNITUDE_SCALE or 2 * consts.MAGNITUDE_SCALE) /
+        local magScale = (effectRecord.hasDuration and consts.MAGNITUDE_SCALE or 1.1 * consts.MAGNITUDE_SCALE) /
             clampedCost
-        local durScale = (effectRecord.hasMagnitude and consts.DURATION_SCALE or 2 * consts.DURATION_SCALE) / clampedCost
+        local durScale = (effectRecord.hasMagnitude and consts.DURATION_SCALE or 1.1 * consts.DURATION_SCALE) / clampedCost
 
 
 
         if effectRecord.hasMagnitude then
             local magnitude = math.max(consts.MIN_MAGNITUDE, score.score * magScale)
 
-            magnitude = easeMax(magnitude, consts.MAX_MAGNITUDE)
+            magnitude = easeMax(magnitude, consts.MAX_MAGNITUDE / clampedCost)
 
             mewp.magnitudeMin = magnitude
             mewp.magnitudeMax = magnitude
@@ -262,7 +262,7 @@ local function buildEffectsList(scores, effectMap)
 
         if effectRecord.hasDuration then
             mewp.duration = math.max(consts.MIN_DURATION, score.score * durScale)
-            mewp.duration = easeMax(mewp.duration, consts.MAX_DURATION)
+            mewp.duration = easeMax(mewp.duration, consts.MAX_DURATION / (1+clampedCost/2))
         end
 
         table.insert(effects, mewp)
